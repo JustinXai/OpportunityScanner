@@ -22,22 +22,34 @@ interface EnvConfig {
 }
 
 function validateEnvironment(): EnvConfig {
+  console.log('\n========================================');
+  console.log('🔍 开始环境变量检查...');
+  console.log('========================================');
+
   const errors: string[] = [];
 
   const serper = process.env.SERPER_API_KEY;
   const doubao = process.env.DOUBAO_API_KEY;
   const deepseek = process.env.DEEPSEEK_API_KEY;
 
-  if (!serper) errors.push('SERPER_API_KEY 未配置');
-  if (!doubao) errors.push('DOUBAO_API_KEY 未配置');
-  if (!deepseek) errors.push('DEEPSEEK_API_KEY 未配置');
+  console.log(`   SERPER_API_KEY: ${serper ? '✅ 已配置' : '❌ 未配置'}`);
+  console.log(`   DOUBAO_API_KEY: ${doubao ? '✅ 已配置' : '❌ 未配置'}`);
+  console.log(`   DEEPSEEK_API_KEY: ${deepseek ? '✅ 已配置' : '❌ 未配置'}`);
+
+  if (!serper) errors.push('Error: Environment variable SERPER_API_KEY is missing.');
+  if (!doubao) errors.push('Error: Environment variable DOUBAO_API_KEY is missing.');
+  if (!deepseek) errors.push('Error: Environment variable DEEPSEEK_API_KEY is missing.');
 
   if (errors.length > 0) {
-    console.error('❌ 环境变量检查失败:');
+    console.error('\n❌ 环境变量检查失败:');
     errors.forEach(e => console.error(`   - ${e}`));
     console.error('\n请在 .env 文件或 GitHub Secrets 中配置这些变量。');
+    console.error('========================================\n');
     process.exit(1);
   }
+
+  console.log('✅ 所有环境变量验证通过');
+  console.log('========================================\n');
 
   return {
     SERPER_API_KEY: serper!,
@@ -174,25 +186,39 @@ class HttpFactory {
 function handleAxiosError(error: unknown, context: string): string {
   if (error instanceof AxiosError) {
     const status = error.response?.status;
+    const statusText = error.response?.statusText;
     const message = error.message;
+    const responseData = error.response?.data;
+
+    let detailedError = `${context}: HTTP ${status || 'unknown'} (${statusText || 'No status text'}) - ${message}`;
 
     if (status === 401) {
-      return `${context}: API 认证失败 (401)。请检查 API Key。`;
-    }
-    if (status === 429) {
-      return `${context}: 请求频率超限 (429)。稍后重试。`;
-    }
-    if (status === 403) {
-      return `${context}: 访问被拒绝 (403)。`;
-    }
-    if (status === 500 || status === 502 || status === 503) {
-      return `${context}: 服务器错误 (${status})。`;
+      detailedError += '\n   └─ API 认证失败 (401)。请检查 API Key 是否正确。';
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
+    } else if (status === 429) {
+      detailedError += '\n   └─ 请求频率超限 (429)。API 配额可能已耗尽。';
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
+    } else if (status === 403) {
+      detailedError += '\n   └─ 访问被拒绝 (403)。可能缺少权限或 IP 白名单限制。';
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
+    } else if (status === 400) {
+      detailedError += '\n   └─ 请求参数错误 (400)。请检查 API 请求格式。';
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
+    } else if (status === 500 || status === 502 || status === 503) {
+      detailedError += '\n   └─ 服务器端错误，请稍后重试。';
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
+    } else if (responseData) {
+      detailedError += `\n   └─ 响应详情: ${JSON.stringify(responseData, null, 2)}`;
     }
 
-    return `${context}: ${message} (HTTP ${status || 'unknown'})`;
+    return detailedError;
   }
 
-  return `${context}: ${error instanceof Error ? error.message : '未知错误'}`;
+  if (error instanceof Error) {
+    return `${context}: ${error.message}\n   └─ Stack: ${error.stack}`;
+  }
+
+  return `${context}: 未知错误类型 - ${JSON.stringify(error)}`;
 }
 
 // ============================================================
@@ -203,7 +229,8 @@ class Fetchers {
   private serperClient = this.http.createSerperClient();
 
   async searchPainSignals(): Promise<PainSignal[]> {
-    console.log('\n🔍 [Fetcher] Serper 搜索痛点信号...');
+    console.log('\n🔍 [Stage 1-1] Starting Serper search...');
+    const startTime = Date.now();
 
     const queries = [
       { q: 'site:reddit.com Shopify broken OR frustrated OR waste of money', platform: 'Reddit' },
@@ -214,10 +241,14 @@ class Fetchers {
 
     const results: PainSignal[] = [];
 
-    for (const { q, platform } of queries) {
+    for (let i = 0; i < queries.length; i++) {
+      const { q, platform } = queries[i];
+      console.log(`   [${i + 1}/${queries.length}] 查询: ${q.substring(0, 40)}...`);
+
       try {
         const response = await this.serperClient.post('', { q, num: 10 });
         const items = response.data?.organic || [];
+        console.log(`      └─ 获得 ${items.length} 条结果`);
 
         for (const item of items.slice(0, 5)) {
           results.push({
@@ -231,20 +262,25 @@ class Fetchers {
           });
         }
       } catch (error) {
-        console.error(`   ⚠️ ${handleAxiosError(error, `Serper 查询 [${q.substring(0, 30)}...]`)}`);
+        console.error(`      ❌ ${handleAxiosError(error, `Serper 查询 [${q.substring(0, 30)}...]`)}`);
       }
     }
 
-    console.log(`✅ 发现 ${results.length} 个痛点信号`);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ [Stage 1-1] Serper search completed in ${elapsed}s. Found ${results.length} pain signals.`);
     return results;
   }
 
   async scrapeShopify(): Promise<PainSignal[]> {
-    console.log('\n🛒 [Fetcher] 抓取 Shopify 应用评论...');
+    console.log('\n🛒 [Stage 1-2] Starting Shopify scraping...');
+    const startTime = Date.now();
 
     try {
+      console.log('   └─ 正在请求 Shopify 应用商店...');
       const client = this.http.createClient({ 'Referer': 'https://www.google.com' });
       const response = await client.get('https://apps.shopify.com/search?q=AI+productivity');
+      console.log('   └─ 收到响应，正在解析 HTML...');
+
       const $ = cheerio.load(response.data);
       const results: PainSignal[] = [];
 
@@ -268,18 +304,22 @@ class Fetchers {
         }
       });
 
-      console.log(`✅ 发现 ${results.length} 个 Shopify 应用`);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`✅ [Stage 1-2] Shopify scraping completed in ${elapsed}s. Found ${results.length} apps.`);
       return results;
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, 'Shopify 抓取')}`);
+      console.error(`   ❌ ${handleAxiosError(error, 'Shopify 抓取')}`);
+      console.log('   └─ 使用模拟数据作为后备...');
       return this.getMockShopifyData();
     }
   }
 
   async scrapeVSCode(): Promise<PainSignal[]> {
-    console.log('\n📦 [Fetcher] 抓取 VSCode 最新插件...');
+    console.log('\n📦 [Stage 1-3] Starting VSCode Marketplace query...');
+    const startTime = Date.now();
 
     try {
+      console.log('   └─ 正在请求 VSCode Marketplace API...');
       const client = this.http.createClient();
       const response = await client.post(
         'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery',
@@ -298,6 +338,7 @@ class Fetchers {
         },
         { headers: { 'api-version': '3.0-preview.1', 'Content-Type': 'application/json' } }
       );
+      console.log('   └─ 收到响应，正在解析扩展数据...');
 
       const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
       const extensions = response.data?.results?.[0]?.extensions || [];
@@ -318,10 +359,11 @@ class Fetchers {
         }
       }
 
-      console.log(`✅ 发现 ${results.length} 个新 VSCode 插件`);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`✅ [Stage 1-3] VSCode Marketplace query completed in ${elapsed}s. Found ${results.length} extensions.`);
       return results;
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, 'VSCode 抓取')}`);
+      console.error(`   ❌ ${handleAxiosError(error, 'VSCode 抓取')}`);
       return [];
     }
   }
@@ -378,6 +420,9 @@ class DoubaoAgent {
   private endpointId = 'ep-20260115140805-6nxf5';
 
   async analyze(signal: PainSignal): Promise<SEOAnalysis> {
+    console.log(`   [AI-1] Starting Doubao analysis for: ${signal.title.substring(0, 30)}...`);
+    const startTime = Date.now();
+
     const prompt = `你是一位精通中文互联网的定价策略师，擅长发现"定价套利"机会。
 
 【商机信号】
@@ -417,6 +462,7 @@ class DoubaoAgent {
 }`;
 
     try {
+      console.log('   [AI-1] Sending request to Doubao API...');
       const client = axios.create({
         baseURL: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
         timeout: 60000,
@@ -432,10 +478,13 @@ class DoubaoAgent {
         temperature: 0.3,
         max_tokens: 600
       });
+      console.log('   [AI-1] Received response from Doubao API');
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`   [AI-1] Doubao analysis completed in ${elapsed}s`);
       return this.parseResponse(response.data.choices[0].message.content);
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, '豆包 API')}`);
+      console.error(`   [AI-1] ❌ ${handleAxiosError(error, 'Doubao API 调用失败')}`);
       return this.getMock();
     }
   }
@@ -478,6 +527,9 @@ class DoubaoAgent {
 // ============================================================
 class DeepSeekAgent {
   async evaluate(signal: PainSignal): Promise<SherlockRiskScore> {
+    console.log(`   [AI-2] Starting DeepSeek evaluation for: ${signal.title.substring(0, 30)}...`);
+    const startTime = Date.now();
+
     const prompt = `你是一位冷酷的 CTO，专门扫描技术风险红线。
 
 【商机信号】
@@ -524,6 +576,7 @@ class DeepSeekAgent {
 }`;
 
     try {
+      console.log('   [AI-2] Sending request to DeepSeek API...');
       const client = axios.create({
         baseURL: 'https://api.deepseek.com/v1',
         timeout: 60000,
@@ -539,10 +592,13 @@ class DeepSeekAgent {
         temperature: 0.5,
         max_tokens: 800
       });
+      console.log('   [AI-2] Received response from DeepSeek API');
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`   [AI-2] DeepSeek evaluation completed in ${elapsed}s`);
       return this.parseResponse(response.data.choices[0].message.content);
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, 'DeepSeek API')}`);
+      console.error(`   [AI-2] ❌ ${handleAxiosError(error, 'DeepSeek API 调用失败')}`);
       return this.getMock();
     }
   }
@@ -587,6 +643,9 @@ class DeepSeekAgent {
 // ============================================================
 class DebateSystem {
   private async deepseekDebate(seo: SEOAnalysis): Promise<string> {
+    console.log('      [Debate-1] DeepSeek counter-argument...');
+    const startTime = Date.now();
+
     const prompt = `你扮演 DeepSeek，现在反驳豆包的观点：
 
 【豆包的论点】
@@ -614,14 +673,19 @@ class DebateSystem {
         max_tokens: 300
       });
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`      [Debate-1] DeepSeek counter-argument completed in ${elapsed}s`);
       return String(response.data.choices[0].message.content).substring(0, 200);
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, 'DeepSeek 辩论')}`);
+      console.error(`      [Debate-1] ❌ ${handleAxiosError(error, 'DeepSeek 辩论')}`);
       return 'DeepSeek: 买断制需快速迭代，否则会被官方功能替代。关键看用户粘性。';
     }
   }
 
   private async doubaoRebuttal(risk: SherlockRiskScore): Promise<string> {
+    console.log('      [Debate-2] Doubao rebuttal...');
+    const startTime = Date.now();
+
     const prompt = `你扮演豆包，现在回击 DeepSeek 的 CTO 观点：
 
 【DeepSeek 的 CTO 担忧】
@@ -650,9 +714,11 @@ class DebateSystem {
         max_tokens: 300
       });
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`      [Debate-2] Doubao rebuttal completed in ${elapsed}s`);
       return String(response.data.choices[0].message.content).substring(0, 200);
     } catch (error) {
-      console.error(`   ⚠️ ${handleAxiosError(error, '豆包 辩论')}`);
+      console.error(`      [Debate-2] ❌ ${handleAxiosError(error, '豆包 辩论')}`);
       return '豆包: 用户已在评论区表达强烈痛点，垂直场景深耕可抵御官方竞争。';
     }
   }
@@ -916,17 +982,21 @@ class OpportunityHunter {
       errors: []
     };
 
+    const totalStartTime = Date.now();
+
     console.log('='.repeat(60));
-    console.log('🎯 OPPORTUNITY HUNTER - 三阶段决策系统 v2.0');
+    console.log('🎯 OPPORTUNITY HUNTER - 三阶段决策系统 v2.1');
     console.log('='.repeat(60));
-    console.log(`📅 ${new Date().toLocaleString('zh-CN')}`);
-    console.log(`🔧 API 配置: 豆包 ✅ | DeepSeek ✅ | Serper ✅\n`);
+    console.log(`📅 ${new Date().toLocaleString('zh-CN')}\n`);
 
     try {
       // 阶段1: 数据采集
-      console.log('📡 阶段1: 数据采集');
+      console.log('\n📡 [STAGE 1] 开始数据采集...\n');
+      const fetchStartTime = Date.now();
       const signals = await this.fetchers.runAll();
+      const fetchElapsed = ((Date.now() - fetchStartTime) / 1000).toFixed(2);
       result.signalsCount = signals.length;
+      console.log(`\n📡 [STAGE 1] 数据采集完成，耗时 ${fetchElapsed}s，获得 ${signals.length} 个信号`);
 
       if (signals.length === 0) {
         console.log('⚠️ 未发现信号，将使用模拟数据继续...');
@@ -936,18 +1006,28 @@ class OpportunityHunter {
       const workingSignals = signals.length > 0 ? signals : this.getFallbackSignals();
 
       // 阶段2: 双模型分析
-      console.log('\n🧠 阶段2: 双模型分析');
+      console.log('\n🧠 [STAGE 2] 开始双模型分析...\n');
+      const analysisStartTime = Date.now();
       const opportunities = await this.processSignals(workingSignals);
+      const analysisElapsed = ((Date.now() - analysisStartTime) / 1000).toFixed(2);
       result.goldensCount = opportunities.length;
+      console.log(`\n🧠 [STAGE 2] 双模型分析完成，耗时 ${analysisElapsed}s，分析 ${opportunities.length} 个机会`);
 
       // 筛选黄金机会
       const goldens = opportunities.filter(o => o.qualified);
 
       // 阶段3: 创建 Issues
-      console.log('\n📝 阶段3: 创建 GitHub Issues...');
-      for (const golden of goldens) {
-        const created = await this.issueCreator.create(golden);
-        if (created) result.issuesCreated++;
+      if (goldens.length > 0) {
+        console.log('\n📝 [STAGE 3] 开始创建 GitHub Issues...\n');
+        const issueStartTime = Date.now();
+        for (const golden of goldens) {
+          const created = await this.issueCreator.create(golden);
+          if (created) result.issuesCreated++;
+        }
+        const issueElapsed = ((Date.now() - issueStartTime) / 1000).toFixed(2);
+        console.log(`\n📝 [STAGE 3] Issues 创建完成，耗时 ${issueElapsed}s`);
+      } else {
+        console.log('\n📝 [STAGE 3] 跳过 Issue 创建（无达标机会）');
       }
 
       // 保存报告
@@ -956,10 +1036,14 @@ class OpportunityHunter {
     } catch (error) {
       result.success = false;
       result.errors.push(error instanceof Error ? error.message : '未知错误');
-      console.error(`\n❌ 扫描异常: ${error instanceof Error ? error.message : '未知错误'}`);
+      console.error(`\n❌ [ERROR] 扫描异常: ${error instanceof Error ? error.message : '未知错误'}`);
+      if (error instanceof Error && error.stack) {
+        console.error(`   Stack: ${error.stack}`);
+      }
     }
 
     // 最终汇总
+    const totalElapsed = ((Date.now() - totalStartTime) / 1000).toFixed(2);
     console.log('\n' + '='.repeat(60));
     if (result.goldensCount > 0) {
       console.log('🎉 扫描完成 - 发现金矿!');
@@ -967,8 +1051,13 @@ class OpportunityHunter {
       console.log('✅ Scan completed: No high-value opportunities found.');
     }
     console.log('='.repeat(60));
-    console.log(`总信号: ${result.signalsCount} | 达标: ${result.goldensCount}`);
-    console.log(`Issues 创建: ${result.issuesCreated}`);
+    console.log(`📊 总耗时: ${totalElapsed}s`);
+    console.log(`📊 总信号: ${result.signalsCount} | 达标: ${result.goldensCount}`);
+    console.log(`📊 Issues 创建: ${result.issuesCreated}`);
+    if (result.errors.length > 0) {
+      console.log(`📊 错误数: ${result.errors.length}`);
+    }
+    console.log('='.repeat(60) + '\n');
 
     return result;
   }
@@ -1074,23 +1163,92 @@ class OpportunityHunter {
 }
 
 // ============================================================
-// 执行入口
+// 执行入口 - 全局错误捕获
 // ============================================================
 async function main(): Promise<void> {
+  console.log('\n========================================');
+  console.log('🚀 Opportunity Hunter 启动中...');
+  console.log('========================================');
+
   try {
+    console.log('⏳ 初始化 OpportunityHunter 实例...');
     const hunter = new OpportunityHunter();
+
+    console.log('⏳ 开始运行扫描任务...');
     const result = await hunter.run();
 
+    console.log('\n========================================');
+    console.log('📋 扫描结果汇总:');
+    console.log('========================================');
+    console.log(`   成功: ${result.success ? '✅' : '❌'}`);
+    console.log(`   信号数: ${result.signalsCount}`);
+    console.log(`   金矿数: ${result.goldensCount}`);
+    console.log(`   Issues 创建: ${result.issuesCreated}`);
+
+    if (result.errors.length > 0) {
+      console.log('\n   ⚠️ 错误列表:');
+      result.errors.forEach((err, i) => console.log(`      ${i + 1}. ${err}`));
+    }
+
+    console.log('========================================');
+
     if (!result.success) {
+      console.error('\n❌ 扫描未成功完成，退出码 1');
       process.exit(1);
     }
 
+    console.log('\n✅ 扫描任务完成，退出码 0\n');
     process.exit(0);
+
   } catch (error) {
-    console.error('❌ 致命错误:', error instanceof Error ? error.message : '未知错误');
+    console.error('\n========================================');
+    console.error('❌ FATAL ERROR - 未捕获的异常');
+    console.error('========================================');
+    console.error(`错误类型: ${error?.constructor?.name || 'Unknown'}`);
+    console.error(`错误消息: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('\n完整堆栈:');
+    console.error(error instanceof Error ? error.stack : String(error));
+    console.error('========================================\n');
+    console.error('请检查环境变量配置和网络连接。');
+    console.error('如问题持续，请在 GitHub Issues 反馈。\n');
     process.exit(1);
   }
 }
+
+// 捕获未处理的 Promise  rejections
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+  console.error('\n========================================');
+  console.error('❌ UNHANDLED PROMISE REJECTION');
+  console.error('========================================');
+  console.error(`原因: ${reason instanceof Error ? reason.message : String(reason)}`);
+  if (reason instanceof Error && reason.stack) {
+    console.error(`堆栈: ${reason.stack}`);
+  }
+  console.error('========================================\n');
+  process.exit(1);
+});
+
+// 捕获未处理的异常
+process.on('uncaughtException', (error: Error) => {
+  console.error('\n========================================');
+  console.error('❌ UNCAUGHT EXCEPTION');
+  console.error('========================================');
+  console.error(`错误: ${error.message}`);
+  console.error(`堆栈: ${error.stack}`);
+  console.error('========================================\n');
+  process.exit(1);
+});
+
+// 信号处理
+process.on('SIGINT', () => {
+  console.log('\n\n⚠️ 接收到中断信号，正在优雅退出...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n\n⚠️ 接收到终止信号，正在优雅退出...');
+  process.exit(0);
+});
 
 main();
 

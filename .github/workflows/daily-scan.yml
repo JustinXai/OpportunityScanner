@@ -1,23 +1,75 @@
 name: Opportunity Scanner
+
 on:
   schedule:
     - cron: '0 0,12 * * *'
   workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 permissions:
   contents: read
   issues: write
+
 jobs:
   scan:
+    name: Scan for Opportunities
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - run: npm install
-      - run: npm run scan
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Display environment
+        run: |
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Working directory: $(pwd)"
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Run Opportunity Scanner
+        run: npm run start
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 14
+          compression-level: 9
+
+      - name: Create workflow summary
+        if: always()
+        run: |
+          echo "## 📊 扫描报告 - ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**运行时间**: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**触发方式**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f reports/*.json ]; then
+            echo "📄 报告已保存至 artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📄 无金矿发现，扫描完成" >> $GITHUB_STEP_SUMMARY
+          fi
