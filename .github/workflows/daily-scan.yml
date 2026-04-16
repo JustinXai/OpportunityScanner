@@ -1,0 +1,36 @@
+name: Opportunity Scanner Pro
+
+on:
+  schedule:
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          # 显式安装 ts-node 以防 package.json 没写进去
+          npm install -g ts-node typescript
+
+      - name: Run Intelligence Scan
+        run: npx ts-node OpportunityHunter.ts
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
