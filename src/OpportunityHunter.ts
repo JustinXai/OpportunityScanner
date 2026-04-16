@@ -2,8 +2,21 @@
  * OpportunityHunter.ts v2.0
  * 多平台商机扫描器 + 三阶段AI决策系统
  *
- * GitHub Actions 稳定运行版
+ * GitHub Actions 稳定运行版 (使用 tsx 运行器)
  */
+
+// ============================================================
+// 系统启动初始化
+// ============================================================
+console.log('--- SYSTEM_BOOT: ENGINE START ---');
+process.on('uncaughtException', (err) => {
+  console.error('FATAL_EXCEPTION:', err.stack || err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('FATAL_REJECTION:', reason);
+  process.exit(1);
+});
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
@@ -32,19 +45,20 @@ function validateEnvironment(): EnvConfig {
   const doubao = process.env.DOUBAO_API_KEY;
   const deepseek = process.env.DEEPSEEK_API_KEY;
 
-  console.log(`   SERPER_API_KEY: ${serper ? '✅ 已配置' : '❌ 未配置'}`);
-  console.log(`   DOUBAO_API_KEY: ${doubao ? '✅ 已配置' : '❌ 未配置'}`);
-  console.log(`   DEEPSEEK_API_KEY: ${deepseek ? '✅ 已配置' : '❌ 未配置'}`);
+  // 只显示前4位，保护敏感信息
+  console.log(`   SERPER_API_KEY: ${serper ? '✅ 已配置 (' + serper.substring(0, 4) + '...)' : '❌ 未配置'}`);
+  console.log(`   DOUBAO_API_KEY: ${doubao ? '✅ 已配置 (' + doubao.substring(0, 4) + '...)' : '❌ 未配置'}`);
+  console.log(`   DEEPSEEK_API_KEY: ${deepseek ? '✅ 已配置 (' + deepseek.substring(0, 4) + '...)' : '❌ 未配置'}`);
 
   if (!serper) errors.push('Error: Environment variable SERPER_API_KEY is missing.');
   if (!doubao) errors.push('Error: Environment variable DOUBAO_API_KEY is missing.');
   if (!deepseek) errors.push('Error: Environment variable DEEPSEEK_API_KEY is missing.');
 
   if (errors.length > 0) {
-    console.error('\n❌ 环境变量检查失败:');
-    errors.forEach(e => console.error(`   - ${e}`));
-    console.error('\n请在 .env 文件或 GitHub Secrets 中配置这些变量。');
-    console.error('========================================\n');
+    process.stderr.write('\n❌ 环境变量检查失败:\n');
+    errors.forEach(e => process.stderr.write(`   - ${e}\n`));
+    process.stderr.write('\n请在 .env 文件或 GitHub Secrets 中配置这些变量。\n');
+    process.stderr.write('========================================\n\n');
     process.exit(1);
   }
 
@@ -262,7 +276,7 @@ class Fetchers {
           });
         }
       } catch (error) {
-        console.error(`      ❌ ${handleAxiosError(error, `Serper 查询 [${q.substring(0, 30)}...]`)}`);
+        process.stderr.write(`      ❌ ${handleAxiosError(error, `Serper 查询 [${q.substring(0, 30)}...]`)}\n`);
       }
     }
 
@@ -308,7 +322,7 @@ class Fetchers {
       console.log(`✅ [Stage 1-2] Shopify scraping completed in ${elapsed}s. Found ${results.length} apps.`);
       return results;
     } catch (error) {
-      console.error(`   ❌ ${handleAxiosError(error, 'Shopify 抓取')}`);
+      process.stderr.write(`   ❌ ${handleAxiosError(error, 'Shopify 抓取')}\n`);
       console.log('   └─ 使用模拟数据作为后备...');
       return this.getMockShopifyData();
     }
@@ -363,7 +377,7 @@ class Fetchers {
       console.log(`✅ [Stage 1-3] VSCode Marketplace query completed in ${elapsed}s. Found ${results.length} extensions.`);
       return results;
     } catch (error) {
-      console.error(`   ❌ ${handleAxiosError(error, 'VSCode 抓取')}`);
+      process.stderr.write(`   ❌ ${handleAxiosError(error, 'VSCode 抓取')}\n`);
       return [];
     }
   }
@@ -484,7 +498,7 @@ class DoubaoAgent {
       console.log(`   [AI-1] Doubao analysis completed in ${elapsed}s`);
       return this.parseResponse(response.data.choices[0].message.content);
     } catch (error) {
-      console.error(`   [AI-1] ❌ ${handleAxiosError(error, 'Doubao API 调用失败')}`);
+      process.stderr.write(`   [AI-1] ❌ ${handleAxiosError(error, 'Doubao API 调用失败')}\n`);
       return this.getMock();
     }
   }
@@ -598,7 +612,7 @@ class DeepSeekAgent {
       console.log(`   [AI-2] DeepSeek evaluation completed in ${elapsed}s`);
       return this.parseResponse(response.data.choices[0].message.content);
     } catch (error) {
-      console.error(`   [AI-2] ❌ ${handleAxiosError(error, 'DeepSeek API 调用失败')}`);
+      process.stderr.write(`   [AI-2] ❌ ${handleAxiosError(error, 'DeepSeek API 调用失败')}\n`);
       return this.getMock();
     }
   }
@@ -677,7 +691,7 @@ class DebateSystem {
       console.log(`      [Debate-1] DeepSeek counter-argument completed in ${elapsed}s`);
       return String(response.data.choices[0].message.content).substring(0, 200);
     } catch (error) {
-      console.error(`      [Debate-1] ❌ ${handleAxiosError(error, 'DeepSeek 辩论')}`);
+      process.stderr.write(`      [Debate-1] ❌ ${handleAxiosError(error, 'DeepSeek 辩论')}\n`);
       return 'DeepSeek: 买断制需快速迭代，否则会被官方功能替代。关键看用户粘性。';
     }
   }
@@ -718,7 +732,7 @@ class DebateSystem {
       console.log(`      [Debate-2] Doubao rebuttal completed in ${elapsed}s`);
       return String(response.data.choices[0].message.content).substring(0, 200);
     } catch (error) {
-      console.error(`      [Debate-2] ❌ ${handleAxiosError(error, '豆包 辩论')}`);
+      process.stderr.write(`      [Debate-2] ❌ ${handleAxiosError(error, '豆包 辩论')}\n`);
       return '豆包: 用户已在评论区表达强烈痛点，垂直场景深耕可抵御官方竞争。';
     }
   }
@@ -1202,7 +1216,7 @@ async function main(): Promise<void> {
 
   } catch (error) {
     console.error('\n========================================');
-    console.error('❌ FATAL ERROR - 未捕获的异常');
+    console.error('❌ BUSINESS_LOGIC_ERROR - 未捕获的异常');
     console.error('========================================');
     console.error(`错误类型: ${error?.constructor?.name || 'Unknown'}`);
     console.error(`错误消息: ${error instanceof Error ? error.message : String(error)}`);
@@ -1218,7 +1232,7 @@ async function main(): Promise<void> {
 // 捕获未处理的 Promise  rejections
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
   console.error('\n========================================');
-  console.error('❌ UNHANDLED PROMISE REJECTION');
+  console.error('❌ BUSINESS_LOGIC_ERROR: UNHANDLED PROMISE REJECTION');
   console.error('========================================');
   console.error(`原因: ${reason instanceof Error ? reason.message : String(reason)}`);
   if (reason instanceof Error && reason.stack) {
@@ -1231,7 +1245,7 @@ process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) =>
 // 捕获未处理的异常
 process.on('uncaughtException', (error: Error) => {
   console.error('\n========================================');
-  console.error('❌ UNCAUGHT EXCEPTION');
+  console.error('❌ BUSINESS_LOGIC_ERROR: UNCAUGHT EXCEPTION');
   console.error('========================================');
   console.error(`错误: ${error.message}`);
   console.error(`堆栈: ${error.stack}`);
