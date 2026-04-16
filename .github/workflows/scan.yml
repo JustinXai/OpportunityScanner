@@ -1,0 +1,49 @@
+name: Opportunity Scanner
+
+on:
+  schedule:
+    - cron: '0 0,12 * * *'  # 每天 00:00 和 12:00 UTC
+  workflow_dispatch:  # 支持手动触发
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Opportunity Scanner
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run scan
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report
+          path: reports/
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 扫描完成 $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
+          echo "报告已保存至 reports/ 目录" >> $GITHUB_STEP_SUMMARY

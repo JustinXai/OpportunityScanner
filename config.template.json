@@ -1,0 +1,20 @@
+{
+  "deepseek": {
+    "apiUrl": "https://api.deepseek.com/v1/chat/completions",
+    "apiKey": "your-deepseek-api-key-here",
+    "model": "deepseek-chat",
+    "temperature": 0.3
+  },
+  "doubao": {
+    "apiUrl": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    "apiKey": "your-doubao-api-key-here",
+    "model": "doubao-pro-32k",
+    "temperature": 0.3
+  },
+  "thresholds": {
+    "riskScoreMax": 7.0,
+    "trafficScoreMin": 4.0,
+    "priorityBoost": 1.2,
+    "priorityPenalty": 0.6
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+.env
+reports/*.json
+.DS_Store
+*.swp
