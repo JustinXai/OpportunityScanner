@@ -5,12 +5,6 @@ on:
     - cron: '0 0,12 * * *'
   workflow_dispatch:
 
-env:
-  # 强制显示 GitHub Actions 内部调试信息
-  ACTIONS_STEP_DEBUG: true
-  # 追踪 Node.js 未捕获的异常
-  NODE_OPTIONS: '--unhandled-rejections=strict --trace-warnings --trace-uncaught'
-
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -27,17 +21,19 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Dependencies
+      - name: Install Runtime
+        # 显式安装 tsx 确保运行环境绝对存在
         run: |
           npm install
-          # 确保全局也有 tsx 以防 npx 路径问题
-          npm install -g tsx 
+          npm install -g tsx
 
       - name: Run Intelligence Scan
-        # 2>&1 确保所有的错误都会被重定向到标准输出，防止被 GitHub 吞掉
-        run: npm start 2>&1
+        # 2>&1 | tee output.log 强制将所有错误信息合并并打印到 stdout
+        run: |
+          stdbuf -oL -eL npx tsx OpportunityHunter.ts 2>&1 | tee runner.log
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
