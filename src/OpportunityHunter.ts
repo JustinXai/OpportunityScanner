@@ -23,7 +23,7 @@ import * as cheerio from 'cheerio';
 import * as fs from 'fs';
 import * as path from 'path';
 import pLimit from 'p-limit';
-import { emailService } from './EmailService.js';
+import { EmailService } from './EmailService.js';
 
 // ============================================================
 // 环境变量验证
@@ -77,9 +77,6 @@ function validateEnvironment(): EnvConfig {
 }
 
 const ENV = validateEnvironment();
-
-// 初始化邮件服务
-emailService.initialize();
 
 const GITHUB_REPO = 'JustinXai/OpportunityScanner';
 
@@ -1094,6 +1091,9 @@ class OpportunityHunter {
       // 保存报告
       this.saveReport(goldens);
 
+      // 存储机会数据供邮件发送使用
+      this.setProcessedOpportunities(opportunities);
+
       // 发送邮件通知
       await this.sendEmailReport(result, goldens, totalElapsed);
 
@@ -1226,25 +1226,75 @@ class OpportunityHunter {
   }
 
   /**
-   * 发送邮件报告
+   * 发送邮件报告 - 只发送 GO 共识的机会
    */
   private async sendEmailReport(result: ScanResult, goldens: GoldenOpportunity[], elapsed: string): Promise<void> {
-    const summary = {
-      date: new Date().toLocaleString('zh-CN'),
-      totalSignals: result.signalsCount,
-      qualifiedCount: result.goldensCount,
-      goCount: goldens.filter(o => o.crossValidation.finalConsensus === 'GO').length,
-      holdCount: goldens.filter(o => o.crossValidation.finalConsensus === 'HOLD').length,
-      issuesCreated: result.issuesCreated,
-      duration: elapsed,
-      errors: result.errors
-    };
-
+    // 只筛选 GO 共识的机会
+    const goOpportunities = goldens.filter(o => o.crossValidation.finalConsensus === 'GO');
+    
     try {
-      await emailService.sendScanReport(summary, goldens);
+      await EmailService.sendReport(this.formatGoReport(goOpportunities));
     } catch (error) {
       console.error(`   📧 邮件发送失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
+  }
+
+  /**
+   * 获取所有 GO 共识的机会
+   */
+  getGoOpportunities(): GoldenOpportunity[] {
+    return this.lastProcessedOpportunities?.filter(o => o.crossValidation.finalConsensus === 'GO') || [];
+  }
+
+  /**
+   * 格式化 GO 报告文本
+   */
+  formatGoReport(opportunities: GoldenOpportunity[]): string {
+    if (opportunities.length === 0) {
+      return '本次扫描未发现金矿机会。';
+    }
+
+    const lines: string[] = [
+      '🚀 发现金矿！商机研报',
+      '========================================',
+      `扫描时间: ${new Date().toLocaleString('zh-CN')}`,
+      `金矿数量: ${opportunities.length}`,
+      '========================================',
+      ''
+    ];
+
+    opportunities.forEach((opp, index) => {
+      lines.push(`【机会 ${index + 1}】`);
+      lines.push(`平台: ${opp.signal.platform}`);
+      lines.push(`标题: ${opp.signal.title}`);
+      lines.push(`链接: ${opp.signal.url}`);
+      lines.push(`风险评分: ${opp.riskScore.total}/100`);
+      lines.push(`定价策略: ${opp.pricing.recommended} - ${opp.pricing.priceRange}`);
+      lines.push(`SEO意图量: ${opp.seoAnalysis.seoIntentVolume}`);
+      lines.push(`转化潜力: ${opp.seoAnalysis.highConversionPotential ? '高' : '中低'}`);
+      lines.push(`套利级别: ${opp.seoAnalysis.pricingArbitrage}`);
+      lines.push(`意图关键词: ${opp.seoAnalysis.intentKeywords.join(', ')}`);
+      lines.push(`CTO点评: ${opp.riskScore.reasoning}`);
+      lines.push(`辩论结论: ${opp.crossValidation.finalConsensus}`);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    });
+
+    lines.push('========================================');
+    lines.push('由 OpportunityScanner 自动生成');
+
+    return lines.join('\n');
+  }
+
+  // 用于存储最近处理的机会
+  private lastProcessedOpportunities: GoldenOpportunity[] = [];
+
+  /**
+   * 内部方法：存储处理结果供外部访问
+   */
+  setProcessedOpportunities(opportunities: GoldenOpportunity[]): void {
+    this.lastProcessedOpportunities = opportunities;
   }
 }
 

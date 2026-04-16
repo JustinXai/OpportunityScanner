@@ -11,8 +11,8 @@ WORKDIR /app
 # 预先复制 package 文件以利用 Docker 缓存层
 COPY package*.json ./
 
-# 安装生产依赖（不含 devDependencies）
-RUN npm ci --production
+# 安装生产依赖
+RUN npm install --omit=dev
 
 # 复制源代码
 COPY src/ ./src/
