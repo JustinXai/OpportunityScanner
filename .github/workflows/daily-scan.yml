@@ -5,6 +5,12 @@ on:
     - cron: '0 0,12 * * *'
   workflow_dispatch:
 
+env:
+  # 强制显示 GitHub Actions 内部调试信息
+  ACTIONS_STEP_DEBUG: true
+  # 追踪 Node.js 未捕获的异常
+  NODE_OPTIONS: '--unhandled-rejections=strict --trace-warnings --trace-uncaught'
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -24,11 +30,12 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install
-          # 显式安装 ts-node 以防 package.json 没写进去
-          npm install -g ts-node typescript
+          # 确保全局也有 tsx 以防 npx 路径问题
+          npm install -g tsx 
 
       - name: Run Intelligence Scan
-        run: npx ts-node OpportunityHunter.ts
+        # 2>&1 确保所有的错误都会被重定向到标准输出，防止被 GitHub 吞掉
+        run: npm start 2>&1
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
