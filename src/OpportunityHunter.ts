@@ -77,6 +77,47 @@ const ENV = validateEnvironment();
 
 const GITHUB_REPO = 'JustinXai/OpportunityScanner';
 
+// ============================================================
+// 日志文件初始化（Docker 部署时写入 /app/logs）
+// ============================================================
+function initFileLogger(): void {
+  const logDir = process.env.LOG_DIR || '/app/logs';
+  const timestamp = new Date().toISOString().split('T')[0];
+  const logFile = path.join(logDir, `scan-${timestamp}.log`);
+  
+  try {
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args: unknown[]) => {
+      const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+      originalLog.apply(console, args);
+      logStream.write(`[${new Date().toISOString()}] ${msg}\n`);
+    };
+    
+    console.error = (...args: unknown[]) => {
+      const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+      originalError.apply(console, args);
+      logStream.write(`[${new Date().toISOString()}] ERROR: ${msg}\n`);
+    };
+    
+    console.log(`📁 日志文件: ${logFile}`);
+  } catch (err) {
+    console.error('⚠️ 无法创建日志文件:', err);
+  }
+}
+
+// 开发环境跳过文件日志（Docker 时自动启用）
+if (process.env.NODE_ENV === 'production') {
+  initFileLogger();
+}
+
 // User-Agent 轮换池
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',

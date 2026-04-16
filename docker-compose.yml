@@ -1,0 +1,39 @@
+# ============================================================
+# OpportunityScanner Docker Compose 配置
+# 一键部署商机扫描器
+# ============================================================
+
+services:
+  scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: opportunity-scanner
+    restart: unless-stopped
+    
+    # API Keys 通过环境变量注入
+    environment:
+      - NODE_ENV=production
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      # 可选：GitHub Token（用于创建 Issue）
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    
+    # 日志持久化挂载
+    volumes:
+      - ./logs:/app/logs
+    
+    # 日志输出配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    
+    # 调度执行（可选，取消注释即可启用定时任务）
+    # command: >
+    #   sh -c "while true; do 
+    #     npx tsx src/OpportunityHunter.ts; 
+    #     sleep 86400; 
+    #   done"
