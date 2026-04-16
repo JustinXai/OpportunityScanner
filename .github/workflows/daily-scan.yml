@@ -1,23 +1,37 @@
-name: Opportunity Scanner
+name: Opportunity Scanner Pro
+
 on:
   schedule:
     - cron: '0 0,12 * * *'
   workflow_dispatch:
-permissions:
-  contents: read
-  issues: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - run: npm install
-      - run: npm run scan
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Intelligence Scan
+        run: npm run start
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 兼容性映射
