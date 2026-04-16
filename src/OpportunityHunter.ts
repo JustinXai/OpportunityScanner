@@ -23,6 +23,7 @@ import * as cheerio from 'cheerio';
 import * as fs from 'fs';
 import * as path from 'path';
 import pLimit from 'p-limit';
+import { emailService } from './EmailService.js';
 
 // ============================================================
 // 环境变量验证
@@ -32,6 +33,7 @@ interface EnvConfig {
   DOUBAO_API_KEY: string;
   DEEPSEEK_API_KEY: string;
   GITHUB_TOKEN?: string;
+  SMTP_CONFIGURED: boolean;
 }
 
 function validateEnvironment(): EnvConfig {
@@ -69,11 +71,15 @@ function validateEnvironment(): EnvConfig {
     SERPER_API_KEY: serper!,
     DOUBAO_API_KEY: doubao!,
     DEEPSEEK_API_KEY: deepseek!,
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    SMTP_CONFIGURED: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   };
 }
 
 const ENV = validateEnvironment();
+
+// 初始化邮件服务
+emailService.initialize();
 
 const GITHUB_REPO = 'JustinXai/OpportunityScanner';
 
@@ -1088,6 +1094,9 @@ class OpportunityHunter {
       // 保存报告
       this.saveReport(goldens);
 
+      // 发送邮件通知
+      await this.sendEmailReport(result, goldens, totalElapsed);
+
     } catch (error) {
       result.success = false;
       result.errors.push(error instanceof Error ? error.message : '未知错误');
@@ -1214,6 +1223,28 @@ class OpportunityHunter {
 
   private countSignals(goldens: GoldenOpportunity[]): number {
     return goldens.length;
+  }
+
+  /**
+   * 发送邮件报告
+   */
+  private async sendEmailReport(result: ScanResult, goldens: GoldenOpportunity[], elapsed: string): Promise<void> {
+    const summary = {
+      date: new Date().toLocaleString('zh-CN'),
+      totalSignals: result.signalsCount,
+      qualifiedCount: result.goldensCount,
+      goCount: goldens.filter(o => o.crossValidation.finalConsensus === 'GO').length,
+      holdCount: goldens.filter(o => o.crossValidation.finalConsensus === 'HOLD').length,
+      issuesCreated: result.issuesCreated,
+      duration: elapsed,
+      errors: result.errors
+    };
+
+    try {
+      await emailService.sendScanReport(summary, goldens);
+    } catch (error) {
+      console.error(`   📧 邮件发送失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 }
 

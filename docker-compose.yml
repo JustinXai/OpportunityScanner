@@ -19,6 +19,14 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       # 可选：GitHub Token（用于创建 Issue）
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # 邮件服务配置
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_TO=${SMTP_TO:-}
     
     # 日志持久化挂载
     volumes:

@@ -34,6 +34,15 @@ SERPER_API_KEY=your_serper_api_key_here
 DOUBAO_API_KEY=your_doubao_api_key_here
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
 GITHUB_TOKEN=your_github_token_here
+
+# 邮件服务配置 (SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+SMTP_FROM=your_email@gmail.com
+SMTP_TO=recipient@example.com
 EOF
     echo "请复制 .env.example 为 .env 并填入你的 API Keys"
     exit 1
