@@ -1,31 +1,38 @@
 {
   "name": "opportunity-scanner",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "商机扫描器 - 双模型AI评估 + 多平台数据采集",
   "main": "src/OpportunityHunter.ts",
   "scripts": {
-    "scan": "ts-node src/OpportunityHunter.ts"
+    "start": "ts-node src/OpportunityHunter.ts",
+    "scan": "ts-node src/OpportunityHunter.ts",
+    "build": "tsc",
+    "dev": "ts-node src/OpportunityHunter.ts"
   },
   "keywords": [
     "opportunity",
     "scanner",
     "ai",
     "serper",
-    "shopify"
+    "shopify",
+    "github-actions"
   ],
-  "author": "",
+  "author": "JustinXai",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "rss-parser": "^3.13.0",
     "user-agents": "^2.2.0",
     "p-limit": "^3.1.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
+    "typescript": "^5.5.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.14.0"
   }
 }

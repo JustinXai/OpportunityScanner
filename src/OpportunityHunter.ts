@@ -1,36 +1,66 @@
 /**
- * OpportunityHunter.ts
+ * OpportunityHunter.ts v2.0
  * 多平台商机扫描器 + 三阶段AI决策系统
  *
- * 架构:
- * 1. Fetchers - 数据采集层 (Serper/Shopify/VSCode)
- * 2. Duel System - 双模型决策大脑
- *    - 阶段1: 豆包 Pro (定价套利 + SEO意图分析)
- *    - 阶段2: DeepSeek V3 (CTO冷血视角 + 风险红线检查)
- *    - 阶段3: 辩论闭环 (交叉验证)
- * 3. Vulnerability Scanner - 漏洞扫描器
- * 4. GitHub Issue 自动创建
+ * GitHub Actions 稳定运行版
  */
 
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import * as fs from 'fs';
 import * as path from 'path';
+import pLimit from 'p-limit';
 
 // ============================================================
-// 配置常量
+// 环境变量验证
 // ============================================================
-const SERPER_API_KEY = 'e2855f3cec91e07e97afb7513f5f672c48d44e34';
+interface EnvConfig {
+  SERPER_API_KEY: string;
+  DOUBAO_API_KEY: string;
+  DEEPSEEK_API_KEY: string;
+  GITHUB_TOKEN?: string;
+}
+
+function validateEnvironment(): EnvConfig {
+  const errors: string[] = [];
+
+  const serper = process.env.SERPER_API_KEY;
+  const doubao = process.env.DOUBAO_API_KEY;
+  const deepseek = process.env.DEEPSEEK_API_KEY;
+
+  if (!serper) errors.push('SERPER_API_KEY 未配置');
+  if (!doubao) errors.push('DOUBAO_API_KEY 未配置');
+  if (!deepseek) errors.push('DEEPSEEK_API_KEY 未配置');
+
+  if (errors.length > 0) {
+    console.error('❌ 环境变量检查失败:');
+    errors.forEach(e => console.error(`   - ${e}`));
+    console.error('\n请在 .env 文件或 GitHub Secrets 中配置这些变量。');
+    process.exit(1);
+  }
+
+  return {
+    SERPER_API_KEY: serper!,
+    DOUBAO_API_KEY: doubao!,
+    DEEPSEEK_API_KEY: deepseek!,
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN
+  };
+}
+
+const ENV = validateEnvironment();
 
 const GITHUB_REPO = 'JustinXai/OpportunityScanner';
 
 // User-Agent 轮换池
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 Mobile'
 ];
+
+// 并发控制
+const CONCURRENCY_LIMIT = pLimit(3);
 
 // ============================================================
 // 类型定义
@@ -49,20 +79,22 @@ interface PainSignal {
 interface SEOAnalysis {
   intentKeywords: string[];
   isOneTimeUse: boolean;
-  frequencyScore: number;  // 1-10, <3 为低频
-  seoIntentVolume: number; // 估算搜索量
-  highConversionPotential: boolean; // frequency < 3 且包含 one-time
+  frequencyScore: number;
+  seoIntentVolume: number;
+  highConversionPotential: boolean;
   pricingArbitrage: 'high' | 'medium' | 'low';
+  analysis: string;
 }
 
 interface SherlockRiskScore {
-  total: number;           // 0-100
-  securityRedLine: boolean; // 是否碰触安全红线
-  infraRedLine: boolean;   // 是否碰触基础设施红线
-  platformBanRisk: number; // 1-10
-  techComplexity: number;   // 1-10
-  technicalDebt: string[];  // 技术债清单
+  total: number;
+  securityRedLine: boolean;
+  infraRedLine: boolean;
+  platformBanRisk: number;
+  techComplexity: number;
+  technicalDebt: string[];
   verdict: 'PROCEED' | 'REVIEW' | 'REJECT';
+  reasoning: string;
 }
 
 interface PricingStrategy {
@@ -98,10 +130,12 @@ interface GoldenOpportunity {
   qualified: boolean;
 }
 
-interface GitHubIssuePayload {
-  title: string;
-  body: string;
-  labels: string[];
+interface ScanResult {
+  success: boolean;
+  signalsCount: number;
+  goldensCount: number;
+  issuesCreated: number;
+  errors: string[];
 }
 
 // ============================================================
@@ -110,16 +144,55 @@ interface GitHubIssuePayload {
 class HttpFactory {
   private uaIndex = 0;
 
-  createClient(): AxiosInstance {
+  createClient(extraHeaders: Record<string, string> = {}): AxiosInstance {
     return axios.create({
       timeout: 30000,
       headers: {
         'User-Agent': USER_AGENTS[this.uaIndex++ % USER_AGENTS.length],
         'Accept': 'application/json, text/html, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        ...extraHeaders
       }
     });
   }
+
+  createSerperClient(): AxiosInstance {
+    return axios.create({
+      baseURL: 'https://google.serper.dev/search',
+      headers: {
+        'X-API-KEY': ENV.SERPER_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      timeout: 20000
+    });
+  }
+}
+
+// ============================================================
+// 错误处理工具
+// ============================================================
+function handleAxiosError(error: unknown, context: string): string {
+  if (error instanceof AxiosError) {
+    const status = error.response?.status;
+    const message = error.message;
+
+    if (status === 401) {
+      return `${context}: API 认证失败 (401)。请检查 API Key。`;
+    }
+    if (status === 429) {
+      return `${context}: 请求频率超限 (429)。稍后重试。`;
+    }
+    if (status === 403) {
+      return `${context}: 访问被拒绝 (403)。`;
+    }
+    if (status === 500 || status === 502 || status === 503) {
+      return `${context}: 服务器错误 (${status})。`;
+    }
+
+    return `${context}: ${message} (HTTP ${status || 'unknown'})`;
+  }
+
+  return `${context}: ${error instanceof Error ? error.message : '未知错误'}`;
 }
 
 // ============================================================
@@ -127,34 +200,23 @@ class HttpFactory {
 // ============================================================
 class Fetchers {
   private http = new HttpFactory();
-  private serperClient: AxiosInstance;
+  private serperClient = this.http.createSerperClient();
 
-  constructor() {
-    this.serperClient = axios.create({
-      baseURL: 'https://google.serper.dev/search',
-      headers: { 'X-API-KEY': SERPER_API_KEY },
-      timeout: 15000
-    });
-  }
-
-  /**
-   * Serper 搜索痛点信号
-   */
   async searchPainSignals(): Promise<PainSignal[]> {
     console.log('\n🔍 [Fetcher] Serper 搜索痛点信号...');
 
     const queries = [
-      { q: 'site:reddit.com "Shopify" "broken" OR "frustrated" OR "waste of money"', platform: 'Reddit' },
-      { q: 'site:reddit.com "VSCode extension" "missing" OR "bug" OR "slow"', platform: 'Reddit' },
-      { q: 'site:chromewebstore.google.com "bad experience" OR "broken" tbs:qdr:h12', platform: 'Chrome' },
-      { q: 'site:reddit.com "Shopify app" "scam" OR "misleading"', platform: 'Reddit' }
+      { q: 'site:reddit.com Shopify broken OR frustrated OR waste of money', platform: 'Reddit' },
+      { q: 'site:reddit.com "VSCode extension" missing OR bug OR slow', platform: 'Reddit' },
+      { q: 'site:reddit.com "Shopify app" scam OR misleading', platform: 'Reddit' },
+      { q: 'Shopify app "one time" OR "one-time" purchase OR lifetime deal', platform: 'General' }
     ];
 
     const results: PainSignal[] = [];
 
     for (const { q, platform } of queries) {
       try {
-        const response = await this.serperClient.post('', { q });
+        const response = await this.serperClient.post('', { q, num: 10 });
         const items = response.data?.organic || [];
 
         for (const item of items.slice(0, 5)) {
@@ -168,8 +230,8 @@ class Fetchers {
             timestamp: new Date()
           });
         }
-      } catch (error: any) {
-        console.error(`❌ Serper 查询失败: ${error.message}`);
+      } catch (error) {
+        console.error(`   ⚠️ ${handleAxiosError(error, `Serper 查询 [${q.substring(0, 30)}...]`)}`);
       }
     }
 
@@ -177,18 +239,12 @@ class Fetchers {
     return results;
   }
 
-  /**
-   * Shopify 应用商店抓取
-   */
   async scrapeShopify(): Promise<PainSignal[]> {
     console.log('\n🛒 [Fetcher] 抓取 Shopify 应用评论...');
 
     try {
-      const client = this.http.createClient();
-      const response = await client.get('https://apps.shopify.com/search?q=AI+productivity', {
-        headers: { 'Referer': 'https://www.google.com' }
-      });
-
+      const client = this.http.createClient({ 'Referer': 'https://www.google.com' });
+      const response = await client.get('https://apps.shopify.com/search?q=AI+productivity');
       const $ = cheerio.load(response.data);
       const results: PainSignal[] = [];
 
@@ -198,8 +254,6 @@ class Fetchers {
         const description = $el.find('[data-testid="card-subtitle"], .subtitle').first().text().trim();
         const ratingStr = $el.find('span[aria-label*="out of 5"]').first().attr('aria-label') || '';
         const rating = parseFloat(ratingStr.match(/([\d.]+) out of/)?.[1] || '0');
-        const reviewsStr = $el.find('span[aria-label*="reviews"]').first().attr('aria-label') || '';
-        const reviews = parseInt(reviewsStr.replace(/[^0-9]/g, '') || '0');
 
         if (title) {
           results.push({
@@ -216,15 +270,12 @@ class Fetchers {
 
       console.log(`✅ 发现 ${results.length} 个 Shopify 应用`);
       return results;
-    } catch (error: any) {
-      console.error(`❌ Shopify 抓取失败: ${error.message}`);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, 'Shopify 抓取')}`);
       return this.getMockShopifyData();
     }
   }
 
-  /**
-   * VSCode Marketplace API
-   */
   async scrapeVSCode(): Promise<PainSignal[]> {
     console.log('\n📦 [Fetcher] 抓取 VSCode 最新插件...');
 
@@ -269,15 +320,15 @@ class Fetchers {
 
       console.log(`✅ 发现 ${results.length} 个新 VSCode 插件`);
       return results;
-    } catch (error: any) {
-      console.error(`❌ VSCode 抓取失败: ${error.message}`);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, 'VSCode 抓取')}`);
       return [];
     }
   }
 
   private analyzeSentiment(text: string): 'negative' | 'neutral' | 'positive' {
-    const negative = ['broken', 'frustrated', 'scam', 'misleading', 'useless', 'terrible'];
-    const positive = ['great', 'amazing', 'love', 'helpful'];
+    const negative = ['broken', 'frustrated', 'scam', 'misleading', 'useless', 'terrible', 'failed'];
+    const positive = ['great', 'amazing', 'love', 'helpful', 'excellent'];
     const lower = text.toLowerCase();
 
     if (negative.some(w => lower.includes(w))) return 'negative';
@@ -289,7 +340,7 @@ class Fetchers {
     return [{
       platform: 'Shopify',
       title: 'AI Product Description Generator Pro',
-      description: 'Generate SEO-optimized product descriptions using AI. Users report: "overselling claims, bulk updates often fail"',
+      description: 'Generate SEO-optimized product descriptions. Users report: overselling claims, bulk updates often fail.',
       url: 'https://apps.shopify.com/ai-pro',
       sentiment: 'negative',
       source: 'mock',
@@ -300,15 +351,23 @@ class Fetchers {
   async runAll(): Promise<PainSignal[]> {
     console.log('\n🚀 [Fetcher] 启动全平台扫描...\n');
 
-    const [serper, shopify, vscode] = await Promise.all([
+    const results = await Promise.allSettled([
       this.searchPainSignals(),
       this.scrapeShopify(),
       this.scrapeVSCode()
     ]);
 
-    const all = [...serper, ...shopify, ...vscode];
-    console.log(`\n📊 总计采集: ${all.length} 个信号\n`);
-    return all;
+    const signals: PainSignal[] = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        signals.push(...result.value);
+      } else {
+        console.error(`   ⚠️ 平台 ${['Serper', 'Shopify', 'VSCode'][index]} 采集失败`);
+      }
+    });
+
+    console.log(`\n📊 总计采集: ${signals.length} 个信号\n`);
+    return signals;
   }
 }
 
@@ -316,17 +375,7 @@ class Fetchers {
 // 第二阶段: 决策大脑 - 豆包 Pro (定价套利分析)
 // ============================================================
 class DoubaoAgent {
-  private apiKey = process.env.DOUBAO_API_KEY || '';
   private endpointId = 'ep-20260115140805-6nxf5';
-  private client: AxiosInstance;
-
-  constructor() {
-    this.client = axios.create({
-      baseURL: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-      timeout: 60000,
-      headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' }
-    });
-  }
 
   async analyze(signal: PainSignal): Promise<SEOAnalysis> {
     const prompt = `你是一位精通中文互联网的定价策略师，擅长发现"定价套利"机会。
@@ -356,9 +405,9 @@ class DoubaoAgent {
    - 找出价格洼地或溢价空间
    - 计算 arbitrage potential (高/中/低)
 
-【输出格式】(仅JSON)
+【输出格式】(仅JSON，不要其他内容)
 {
-  "intentKeywords": ["关键词1", "关键词2"...],
+  "intentKeywords": ["关键词1", "关键词2"],
   "isOneTimeUse": true或false,
   "frequencyScore": 1-10,
   "seoIntentVolume": 1000-100000,
@@ -368,7 +417,16 @@ class DoubaoAgent {
 }`;
 
     try {
-      const response = await this.client.post('', {
+      const client = axios.create({
+        baseURL: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+        timeout: 60000,
+        headers: {
+          'Authorization': `Bearer ${ENV.DOUBAO_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await client.post('', {
         model: this.endpointId,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
@@ -376,8 +434,8 @@ class DoubaoAgent {
       });
 
       return this.parseResponse(response.data.choices[0].message.content);
-    } catch (error: any) {
-      console.error(`❌ 豆包 API 错误: ${error.message}`);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, '豆包 API')}`);
       return this.getMock();
     }
   }
@@ -385,16 +443,17 @@ class DoubaoAgent {
   private parseResponse(content: string): SEOAnalysis {
     try {
       const match = content.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('No JSON');
+      if (!match) throw new Error('No JSON found');
       const data = JSON.parse(match[0]);
       return {
-        intentKeywords: data.intentKeywords || [],
-        isOneTimeUse: data.isOneTimeUse || false,
-        frequencyScore: data.frequencyScore || 5,
-        seoIntentVolume: data.seoIntentVolume || 5000,
-        highConversionPotential: data.highConversionPotential || false,
-        pricingArbitrage: data.pricingArbitrage || 'medium',
-        analysis: data.analysis || ''
+        intentKeywords: Array.isArray(data.intentKeywords) ? data.intentKeywords : [],
+        isOneTimeUse: Boolean(data.isOneTimeUse),
+        frequencyScore: Number(data.frequencyScore) || 5,
+        seoIntentVolume: Number(data.seoIntentVolume) || 5000,
+        highConversionPotential: Boolean(data.highConversionPotential),
+        pricingArbitrage: ['high', 'medium', 'low'].includes(data.pricingArbitrage)
+          ? data.pricingArbitrage : 'medium',
+        analysis: String(data.analysis || '')
       };
     } catch {
       return this.getMock();
@@ -418,17 +477,6 @@ class DoubaoAgent {
 // 第二阶段: 决策大脑 - DeepSeek V3 (CTO 冷血视角)
 // ============================================================
 class DeepSeekAgent {
-  private apiKey = process.env.DEEPSEEK_API_KEY || '';
-  private client: AxiosInstance;
-
-  constructor() {
-    this.client = axios.create({
-      baseURL: 'https://api.deepseek.com/v1',
-      timeout: 60000,
-      headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' }
-    });
-  }
-
   async evaluate(signal: PainSignal): Promise<SherlockRiskScore> {
     const prompt = `你是一位冷酷的 CTO，专门扫描技术风险红线。
 
@@ -463,7 +511,7 @@ class DeepSeekAgent {
    - REVIEW: 风险 40-70
    - REJECT: 风险 > 70
 
-【输出格式】(仅JSON)
+【输出格式】(仅JSON，不要其他内容)
 {
   "total": 0-100,
   "securityRedLine": true或false,
@@ -476,7 +524,16 @@ class DeepSeekAgent {
 }`;
 
     try {
-      const response = await this.client.post('/chat/completions', {
+      const client = axios.create({
+        baseURL: 'https://api.deepseek.com/v1',
+        timeout: 60000,
+        headers: {
+          'Authorization': `Bearer ${ENV.DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await client.post('/chat/completions', {
         model: 'deepseek-chat',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
@@ -484,8 +541,8 @@ class DeepSeekAgent {
       });
 
       return this.parseResponse(response.data.choices[0].message.content);
-    } catch (error: any) {
-      console.error(`❌ DeepSeek API 错误: ${error.message}`);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, 'DeepSeek API')}`);
       return this.getMock();
     }
   }
@@ -493,17 +550,18 @@ class DeepSeekAgent {
   private parseResponse(content: string): SherlockRiskScore {
     try {
       const match = content.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('No JSON');
+      if (!match) throw new Error('No JSON found');
       const data = JSON.parse(match[0]);
       return {
-        total: data.total || 50,
-        securityRedLine: data.securityRedLine || false,
-        infraRedLine: data.infraRedLine || false,
-        platformBanRisk: data.platformBanRisk || 5,
-        techComplexity: data.techComplexity || 5,
-        technicalDebt: data.technicalDebt || [],
-        verdict: data.verdict || 'REVIEW',
-        reasoning: data.reasoning || ''
+        total: Number(data.total) || 50,
+        securityRedLine: Boolean(data.securityRedLine),
+        infraRedLine: Boolean(data.infraRedLine),
+        platformBanRisk: Number(data.platformBanRisk) || 5,
+        techComplexity: Number(data.techComplexity) || 5,
+        technicalDebt: Array.isArray(data.technicalDebt) ? data.technicalDebt : [],
+        verdict: ['PROCEED', 'REVIEW', 'REJECT'].includes(data.verdict)
+          ? data.verdict : 'REVIEW',
+        reasoning: String(data.reasoning || '')
       };
     } catch {
       return this.getMock();
@@ -528,34 +586,7 @@ class DeepSeekAgent {
 // 第三阶段: 辩论闭环
 // ============================================================
 class DebateSystem {
-  private doubao = new DoubaoAgent();
-  private deepseek = new DeepSeekAgent();
-
-  async crossValidate(
-    signal: PainSignal,
-    seo: SEOAnalysis,
-    risk: SherlockRiskScore
-  ): Promise<CrossValidation> {
-    console.log(`\n⚔️ [Debate] 启动辩论闭环: ${signal.title.substring(0, 40)}...`);
-
-    // DeepSeek 反驳豆包
-    const deepseekDefense = await this.deepseekDebate(signal, seo);
-
-    // 豆包回击 (基于最新 Serper 评论)
-    const doubaoOffense = await this.doubaoRebuttal(signal, risk);
-
-    // 最终共识
-    const consensus = this.determineConsensus(risk, seo);
-
-    return {
-      doubaoOffense,
-      deepseekDefense,
-      finalConsensus: consensus,
-      debateSummary: `${doubaoOffense.substring(0, 50)}... vs ...${deepseekDefense.substring(0, 50)}`
-    };
-  }
-
-  private async deepseekDebate(signal: PainSignal, seo: SEOAnalysis): Promise<string> {
+  private async deepseekDebate(seo: SEOAnalysis): Promise<string> {
     const prompt = `你扮演 DeepSeek，现在反驳豆包的观点：
 
 【豆包的论点】
@@ -564,29 +595,33 @@ class DebateSystem {
 - 一次性使用: ${seo.isOneTimeUse}
 
 【你的任务 - 反驳】
-1. "如果微软/Shopify 出官方功能，买断制能否持续盈利？"
-2. "技术债如何影响买断制的长期维护成本？"
-3. "谁是买断制的真正目标用户？"
+1. 如果微软/Shopify 出官方功能，买断制能否持续盈利？
+2. 技术债如何影响买断制的长期维护成本？
+3. 谁是买断制的真正目标用户？
 
 【输出】50字内的反驳观点`;
 
     try {
-      const response = await axios.post(
-        'https://api.deepseek.com/v1/chat/completions',
-        {
-          model: 'deepseek-chat',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 300
-        },
-        { headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}` } }
-      );
-      return response.data.choices[0].message.content.substring(0, 200);
-    } catch {
+      const client = axios.create({
+        baseURL: 'https://api.deepseek.com/v1',
+        timeout: 30000,
+        headers: { 'Authorization': `Bearer ${ENV.DEEPSEEK_API_KEY}` }
+      });
+
+      const response = await client.post('/chat/completions', {
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300
+      });
+
+      return String(response.data.choices[0].message.content).substring(0, 200);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, 'DeepSeek 辩论')}`);
       return 'DeepSeek: 买断制需快速迭代，否则会被官方功能替代。关键看用户粘性。';
     }
   }
 
-  private async doubaoRebuttal(signal: PainSignal, risk: SherlockRiskScore): Promise<string> {
+  private async doubaoRebuttal(risk: SherlockRiskScore): Promise<string> {
     const prompt = `你扮演豆包，现在回击 DeepSeek 的 CTO 观点：
 
 【DeepSeek 的 CTO 担忧】
@@ -595,7 +630,7 @@ class DebateSystem {
 - 技术债: ${risk.technicalDebt.join(', ')}
 
 【你的任务 - 回击】
-根据最新的 Serper 评论反馈，证明：
+根据最新市场反馈，证明：
 1. 用户痛点是否真实存在（评论数量和情绪）
 2. 垂直场景的差异化能否抵御官方竞争
 3. MVP 的快速验证价值
@@ -603,17 +638,21 @@ class DebateSystem {
 【输出】50字内的回击观点`;
 
     try {
-      const response = await axios.post(
-        'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-        {
-          model: 'ep-20260115140805-6nxf5',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 300
-        },
-        { headers: { 'Authorization': `Bearer ${process.env.DOUBAO_API_KEY}` } }
-      );
-      return response.data.choices[0].message.content.substring(0, 200);
-    } catch {
+      const client = axios.create({
+        baseURL: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+        timeout: 30000,
+        headers: { 'Authorization': `Bearer ${ENV.DOUBAO_API_KEY}` }
+      });
+
+      const response = await client.post('', {
+        model: 'ep-20260115140805-6nxf5',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300
+      });
+
+      return String(response.data.choices[0].message.content).substring(0, 200);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, '豆包 辩论')}`);
       return '豆包: 用户已在评论区表达强烈痛点，垂直场景深耕可抵御官方竞争。';
     }
   }
@@ -624,6 +663,24 @@ class DebateSystem {
     if (seo.highConversionPotential && risk.verdict === 'REVIEW') return 'HOLD';
     return 'HOLD';
   }
+
+  async crossValidate(signal: PainSignal, seo: SEOAnalysis, risk: SherlockRiskScore): Promise<CrossValidation> {
+    console.log(`\n⚔️ [Debate] 启动辩论闭环...`);
+
+    const [deepseekDefense, doubaoOffense] = await Promise.all([
+      this.deepseekDebate(seo),
+      this.doubaoRebuttal(risk)
+    ]);
+
+    const consensus = this.determineConsensus(risk, seo);
+
+    return {
+      doubaoOffense,
+      deepseekDefense,
+      finalConsensus: consensus,
+      debateSummary: `${doubaoOffense.substring(0, 50)}... vs ...${deepseekDefense.substring(0, 50)}`
+    };
+  }
 }
 
 // ============================================================
@@ -631,34 +688,38 @@ class DebateSystem {
 // ============================================================
 class VulnerabilityScanner {
   private keywords = [
-    'overselling',
-    'slowed down my store',
-    'bulk update failed',
-    'completely broken',
-    'waste of money',
-    'scam',
-    'doesn\'t work',
-    'fake reviews'
+    { word: 'overselling', type: 'overselling' as const },
+    { word: 'slowed down my store', type: 'slowed_down' as const },
+    { word: 'bulk update failed', type: 'bulk_update_failed' as const },
+    { word: 'completely broken', type: 'other' as const },
+    { word: 'waste of money', type: 'other' as const },
+    { word: "doesn't work", type: 'other' as const }
   ];
 
-  async scanComments(apps: PainSignal[]): Promise<VulnerabilityPoint[]> {
+  scanComments(apps: PainSignal[]): VulnerabilityPoint[] {
     console.log('\n🔬 [VulnScanner] 扫描漏洞信号...');
 
     const results: VulnerabilityPoint[] = [];
 
     for (const app of apps.filter(a => a.platform === 'Shopify')) {
-      // 模拟扫描结果 (实际应抓取真实评论)
-      const found = this.keywords.filter(k =>
-        app.description.toLowerCase().includes(k) ||
-        (app.rawComments || []).some(c => c.toLowerCase().includes(k))
-      );
+      const foundKeywords: string[] = [];
 
-      if (found.length > 0) {
+      for (const { word } of this.keywords) {
+        if (app.description.toLowerCase().includes(word)) {
+          foundKeywords.push(word);
+        }
+        if (app.rawComments?.some(c => c.toLowerCase().includes(word))) {
+          foundKeywords.push(word);
+        }
+      }
+
+      if (foundKeywords.length > 0) {
+        const uniqueKeywords = [...new Set(foundKeywords)];
         results.push({
-          type: this.mapToType(found),
-          severity: this.calculateSeverity(found),
+          type: this.mapToType(uniqueKeywords),
+          severity: this.calculateSeverity(uniqueKeywords),
           affectedApps: [app.title],
-          exploitability: `发现关键词: ${found.join(', ')}`
+          exploitability: `发现关键词: ${uniqueKeywords.join(', ')}`
         });
       }
     }
@@ -675,9 +736,9 @@ class VulnerabilityScanner {
   }
 
   private calculateSeverity(keywords: string[]): VulnerabilityPoint['severity'] {
-    const critical = ['overselling', 'scam', 'fake reviews'];
-    const high = ['broken', 'doesn\'t work'];
-    const medium = ['slowed down', 'bulk update failed'];
+    const critical = ['overselling', 'waste of money'];
+    const high = ['completely broken', "doesn't work"];
+    const medium = ['slowed down my store', 'bulk update failed'];
 
     if (keywords.some(k => critical.includes(k))) return 'critical';
     if (keywords.some(k => high.includes(k))) return 'high';
@@ -699,12 +760,11 @@ class PricingGenerator {
       recommended = 'freemium';
     }
 
-    // DeepSeek CTO 可能建议降低风险
     if (risk.total > 50) {
       recommended = 'hybrid';
     }
 
-    const priceRanges = {
+    const priceRanges: Record<PricingStrategy['recommended'], string> = {
       'lifetime': '$49-199 (买断) + $20 升级费',
       'subscription': '$9-29/月 或 $99-299/年',
       'freemium': '免费基础 + $19-49/高级功能',
@@ -727,27 +787,28 @@ class PricingGenerator {
 // GitHub Issue 创建器
 // ============================================================
 class GitHubIssueCreator {
-  private token = process.env.GITHUB_TOKEN || '';
-  private client: AxiosInstance;
+  private client: AxiosInstance | null = null;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: 'https://api.github.com',
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    });
+    if (ENV.GITHUB_TOKEN) {
+      this.client = axios.create({
+        baseURL: 'https://api.github.com',
+        headers: {
+          'Authorization': `Bearer ${ENV.GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+    }
   }
 
   async create(opp: GoldenOpportunity): Promise<boolean> {
-    if (!this.token) {
-      console.log('⚠️ 未配置 GITHUB_TOKEN，跳过 Issue 创建');
+    if (!this.client) {
+      console.log('   ⚠️ 未配置 GITHUB_TOKEN，跳过 Issue 创建');
       return false;
     }
 
-    const payload: GitHubIssuePayload = {
+    const payload = {
       title: `[GOLDEN_OPPORTUNITY] ${opp.signal.platform} - ${opp.signal.title.substring(0, 50)}`,
       body: this.generateBody(opp),
       labels: ['golden-opportunity', `platform:${opp.signal.platform.toLowerCase()}`, 'auto-generated']
@@ -755,10 +816,10 @@ class GitHubIssueCreator {
 
     try {
       await this.client.post(`/repos/${GITHUB_REPO}/issues`, payload);
-      console.log(`✅ GitHub Issue 已创建`);
+      console.log(`   ✅ GitHub Issue 已创建`);
       return true;
-    } catch (error: any) {
-      console.error(`❌ Issue 创建失败: ${error.message}`);
+    } catch (error) {
+      console.error(`   ⚠️ ${handleAxiosError(error, 'Issue 创建')}`);
       return false;
     }
   }
@@ -846,23 +907,73 @@ class OpportunityHunter {
   private vulnScanner = new VulnerabilityScanner();
   private issueCreator = new GitHubIssueCreator();
 
-  async run(): Promise<void> {
-    console.log('='.repeat(60));
-    console.log('🎯 OPPORTUNITY HUNTER - 三阶段决策系统');
-    console.log('='.repeat(60));
-    console.log(`📅 ${new Date().toLocaleString('zh-CN')}\n`);
+  async run(): Promise<ScanResult> {
+    const result: ScanResult = {
+      success: true,
+      signalsCount: 0,
+      goldensCount: 0,
+      issuesCreated: 0,
+      errors: []
+    };
 
-    // 阶段1: 数据采集
-    console.log('📡 阶段1: 数据采集');
-    const signals = await this.fetchers.runAll();
+    console.log('='.repeat(60));
+    console.log('🎯 OPPORTUNITY HUNTER - 三阶段决策系统 v2.0');
+    console.log('='.repeat(60));
+    console.log(`📅 ${new Date().toLocaleString('zh-CN')}`);
+    console.log(`🔧 API 配置: 豆包 ✅ | DeepSeek ✅ | Serper ✅\n`);
 
-    if (signals.length === 0) {
-      console.log('❌ 未发现信号，退出');
-      return;
+    try {
+      // 阶段1: 数据采集
+      console.log('📡 阶段1: 数据采集');
+      const signals = await this.fetchers.runAll();
+      result.signalsCount = signals.length;
+
+      if (signals.length === 0) {
+        console.log('⚠️ 未发现信号，将使用模拟数据继续...');
+      }
+
+      // 确保至少有数据可处理
+      const workingSignals = signals.length > 0 ? signals : this.getFallbackSignals();
+
+      // 阶段2: 双模型分析
+      console.log('\n🧠 阶段2: 双模型分析');
+      const opportunities = await this.processSignals(workingSignals);
+      result.goldensCount = opportunities.length;
+
+      // 筛选黄金机会
+      const goldens = opportunities.filter(o => o.qualified);
+
+      // 阶段3: 创建 Issues
+      console.log('\n📝 阶段3: 创建 GitHub Issues...');
+      for (const golden of goldens) {
+        const created = await this.issueCreator.create(golden);
+        if (created) result.issuesCreated++;
+      }
+
+      // 保存报告
+      this.saveReport(goldens);
+
+    } catch (error) {
+      result.success = false;
+      result.errors.push(error instanceof Error ? error.message : '未知错误');
+      console.error(`\n❌ 扫描异常: ${error instanceof Error ? error.message : '未知错误'}`);
     }
 
-    // 处理每个信号
-    console.log('\n🧠 阶段2: 双模型分析');
+    // 最终汇总
+    console.log('\n' + '='.repeat(60));
+    if (result.goldensCount > 0) {
+      console.log('🎉 扫描完成 - 发现金矿!');
+    } else {
+      console.log('✅ Scan completed: No high-value opportunities found.');
+    }
+    console.log('='.repeat(60));
+    console.log(`总信号: ${result.signalsCount} | 达标: ${result.goldensCount}`);
+    console.log(`Issues 创建: ${result.issuesCreated}`);
+
+    return result;
+  }
+
+  private async processSignals(signals: PainSignal[]): Promise<GoldenOpportunity[]> {
     const opportunities: GoldenOpportunity[] = [];
 
     for (const signal of signals) {
@@ -876,7 +987,7 @@ class OpportunityHunter {
         ]);
 
         // 漏洞扫描
-        const vulns = await this.vulnScanner.scanComments([signal]);
+        const vulns = this.vulnScanner.scanComments([signal]);
 
         // 定价策略
         const pricing = PricingGenerator.generate(seo, risk);
@@ -906,65 +1017,82 @@ class OpportunityHunter {
         console.log(`   💰 定价: ${pricing.recommended} | ${pricing.priceRange}`);
         console.log(`   ⚔️ 共识: ${crossValidation.finalConsensus} | 达标: ${qualified ? '🎯 YES' : '❌ NO'}`);
 
-      } catch (error: any) {
-        console.error(`❌ 分析失败: ${error.message}`);
+      } catch (error) {
+        console.error(`   ⚠️ 分析失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     }
 
-    // 筛选黄金机会
-    const goldens = opportunities.filter(o => o.qualified);
+    return opportunities;
+  }
 
-    // 创建 GitHub Issues
-    console.log('\n📝 创建 GitHub Issues...');
-    for (const golden of goldens) {
-      await this.issueCreator.create(golden);
-    }
-
-    // 保存报告
-    this.saveReport(goldens);
-
-    // 最终汇总
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 扫描完成');
-    console.log('='.repeat(60));
-    console.log(`总信号: ${signals.length} | 达标: ${goldens.length}`);
-    console.log(`GO: ${goldens.filter(o => o.crossValidation.finalConsensus === 'GO').length}`);
-    console.log(`HOLD: ${goldens.filter(o => o.crossValidation.finalConsensus === 'HOLD').length}`);
-
-    if (goldens.length > 0) {
-      console.log('\n🎯 GOLDEN OPPORTUNITIES:');
-      goldens.forEach((g, i) => {
-        console.log(`${i + 1}. [${g.signal.platform}] ${g.signal.title}`);
-        console.log(`   风险: ${g.riskScore.total}/100 | 定价: ${g.pricing.recommended}`);
-      });
-    }
+  private getFallbackSignals(): PainSignal[] {
+    console.log('⚠️ 使用模拟数据进行测试...');
+    return [{
+      platform: 'Shopify',
+      title: 'AI Product Description Generator Pro',
+      description: 'Generate SEO-optimized product descriptions using AI. Users report: overselling claims.',
+      url: 'https://apps.shopify.com/ai-pro',
+      sentiment: 'negative',
+      source: 'fallback',
+      timestamp: new Date()
+    }];
   }
 
   private saveReport(goldens: GoldenOpportunity[]): void {
-    const outputDir = path.join(process.cwd(), 'reports');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    try {
+      const outputDir = path.join(process.cwd(), 'reports');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
 
-    const date = new Date().toISOString().split('T')[0];
-    const filename = `golden-opportunities-${date}.json`;
-    const filepath = path.join(outputDir, filename);
+      const date = new Date().toISOString().split('T')[0];
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `golden-opportunities-${date}.json`;
+      const filepath = path.join(outputDir, filename);
 
-    fs.writeFileSync(filepath, JSON.stringify(goldens, null, 2), 'utf-8');
-    console.log(`\n📄 报告已保存: ${filepath}`);
+      const report = {
+        generatedAt: new Date().toISOString(),
+        summary: {
+          totalSignals: this.countSignals(goldens),
+          qualifiedCount: goldens.length,
+          goCount: goldens.filter(o => o.crossValidation.finalConsensus === 'GO').length,
+          holdCount: goldens.filter(o => o.crossValidation.finalConsensus === 'HOLD').length
+        },
+        opportunities: goldens
+      };
+
+      fs.writeFileSync(filepath, JSON.stringify(report, null, 2), 'utf-8');
+      console.log(`\n📄 报告已保存: ${filepath}`);
+    } catch (error) {
+      console.error(`   ⚠️ 报告保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }
+
+  private countSignals(goldens: GoldenOpportunity[]): number {
+    return goldens.length;
   }
 }
 
 // ============================================================
 // 执行入口
 // ============================================================
-if (require.main === module) {
-  console.log('\n🔧 环境变量检查:');
-  console.log(`   DOUBAO_API_KEY: ${process.env.DOUBAO_API_KEY ? '✅' : '⚠️ 未配置'}`);
-  console.log(`   DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? '✅' : '⚠️ 未配置'}`);
-  console.log(`   GITHUB_TOKEN: ${process.env.GITHUB_TOKEN ? '✅' : '⚠️ 未配置'}`);
-  console.log(`   目标仓库: ${GITHUB_REPO}\n`);
+async function main(): Promise<void> {
+  try {
+    const hunter = new OpportunityHunter();
+    const result = await hunter.run();
 
-  new OpportunityHunter().run().catch(console.error);
+    if (!result.success) {
+      process.exit(1);
+    }
+
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ 致命错误:', error instanceof Error ? error.message : '未知错误');
+    process.exit(1);
+  }
 }
+
+main();
 
 export {
   OpportunityHunter,
@@ -973,5 +1101,6 @@ export {
   DeepSeekAgent,
   DebateSystem,
   VulnerabilityScanner,
-  GoldenOpportunity
+  GoldenOpportunity,
+  validateEnvironment
 };
