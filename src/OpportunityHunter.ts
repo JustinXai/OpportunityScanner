@@ -688,23 +688,16 @@ class Fetchers {
 
     const queries = [
       // MV3 崩盘替代（核心情报）
-      { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3崩盘' },
-      { q: '"uBlock Origin" replacement chrome 2026', category: 'MV3崩盘' },
-      { q: '"broken after update" extension reddit', category: 'MV3崩盘' },
-      { q: 'site:reddit.com "Manifest V3" broken extension', category: 'MV3崩盘' },
+      { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3替代' },
+      { q: '"uBlock Origin" replacement chrome 2026', category: 'uBlock替代' },
       
-      // 极简主义套利
-      { q: '"lightweight" chrome extension for productivity', category: '极简主义' },
-      { q: '"simple" word counter "right click" chrome', category: '极简主义' },
-      { q: '"no popup" dictionary extension chrome', category: '极简主义' },
-      { q: 'minimal chrome extension alternative', category: '极简主义' },
+      // Chrome Web Store 直接差评搜索
+      { q: 'site:chromewebstore.google.com "one star" "broken" "manifest v3"', category: 'WebStore差评' },
+      { q: 'site:chromewebstore.google.com "not working" "2026"', category: 'WebStore失效' },
+      { q: 'site:chromewebstore.google.com review "useless" "paid"', category: 'WebStore抱怨' },
       
-      // 定价套利（订阅制厌恶）
-      { q: '"one-time fee" chrome extension', category: '定价套利' },
-      { q: '"lifetime deal" browser tool extension', category: '定价套利' },
-      { q: '"free alternative to" Grammarly chrome', category: '定价套利' },
-      { q: '"free alternative to" Loom chrome extension', category: '定价套利' },
-      { q: '"too expensive" chrome extension reddit', category: '定价套利' }
+      // Reddit 怨气（有噪音过滤）
+      { q: 'site:reddit.com "broken" chrome extension manifest v3 -scam -fake reviews', category: 'Reddit怨气' }
     ];
 
     const results: PainSignal[] = [];
@@ -720,16 +713,33 @@ class Fetchers {
         for (const item of items.slice(0, 3)) {
           const title = item.title || '';
           const snippet = item.snippet || '';
+          const url = item.link || '';
+
+          // Reddit 噪音过滤：降低无具体功能指向的信号优先级
+          const isLowPriorityReddit = (
+            url.includes('reddit.com') && 
+            (title.toLowerCase().includes('scam') || title.toLowerCase().includes('fake reviews')) &&
+            !snippet.match(/extension|plugin|tool|app|addon/i)
+          );
+          
+          if (isLowPriorityReddit) {
+            console.log(`      └─ [过滤] Reddit噪音（无具体工具名）: ${title.substring(0, 40)}...`);
+            continue; // 跳过低优先级信号
+          }
 
           // 提取被替代的产品名
           const altMatch = snippet.match(/alternative to ["']?([A-Za-z0-9\s]+?)["']?\s*(?:extension|chrome|plugin)/i);
           const targetProduct = altMatch ? altMatch[1].trim() : '';
 
+          // 优先处理带具体工具名称的抱怨
+          const hasSpecificTool = snippet.match(/extension|plugin|tool|app|addon/i);
+          const priorityTag = hasSpecificTool ? '🔥HOT' : '📌MED';
+
           results.push({
             platform: 'Chrome-MV3',
-            title: `[CHROME_V3_HUNT][${category}] ${title}`,
+            title: `[${priorityTag}][${category}] ${title}`,
             description: `[需求类型: ${category}]${targetProduct ? ` 替代品目标: ${targetProduct}` : ''} | ${snippet}`.substring(0, 400),
-            url: item.link || '',
+            url,
             sentiment: this.analyzeSentiment(snippet),
             source: 'serper-chrome-mv3',
             timestamp: new Date()
@@ -777,20 +787,130 @@ class Fetchers {
     const results = await Promise.allSettled([
       this.searchPainSignals(),
       this.scrapeShopify(),
-      this.scrapeVSCode()
+      this.scrapeVSCode(),
+      this.fetchChromeWebStoreSignals() // 新增 Chrome Web Store 直接采集
     ]);
 
     const signals: PainSignal[] = [];
+    const platformCounts = { Chrome: 0, Shopify: 0, VSCode: 0, Reddit: 0, Other: 0 };
+    
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         signals.push(...result.value);
+        result.value.forEach(s => {
+          if (s.platform?.includes('Chrome')) platformCounts.Chrome++;
+          else if (s.platform === 'Shopify') platformCounts.Shopify++;
+          else if (s.platform === 'VSCode') platformCounts.VSCode++;
+          else if (s.source?.includes('reddit')) platformCounts.Reddit++;
+          else platformCounts.Other++;
+        });
       } else {
-        console.error(`   ⚠️ 平台 ${['Serper', 'Shopify', 'VSCode'][index]} 采集失败`);
+        console.error(`   ⚠️ 平台 ${['Serper', 'Shopify', 'VSCode', 'ChromeWebStore'][index]} 采集失败`);
       }
     });
 
+    // 强制权重分配：确保 Chrome Web Store 和 VSCode 各至少 5 条
+    const chromeSignals = signals.filter(s => s.platform?.includes('Chrome') || s.source === 'vscode-marketplace');
+    const vscodeSignals = signals.filter(s => s.platform === 'VSCode' || s.source === 'vscode-marketplace');
+    
+    console.log(`   📊 当前分布: Chrome=${platformCounts.Chrome} | Shopify=${platformCounts.Shopify} | VSCode=${platformCounts.VSCode} | Reddit=${platformCounts.Reddit}`);
+    
+    // 补充 Chrome 信号（如果不足 5 条）
+    if (platformCounts.Chrome < 5) {
+      console.log(`   ⚠️ Chrome 信号不足(${platformCounts.Chrome})，补充搜索...`);
+      const extraChrome = await this.fetchChromeMV3Signals();
+      signals.push(...extraChrome.slice(0, 5 - platformCounts.Chrome));
+    }
+    
+    // 补充 VSCode 信号（如果不足 5 条）
+    if (platformCounts.VSCode < 5) {
+      console.log(`   ⚠️ VSCode 信号不足(${platformCounts.VSCode})，补充搜索...`);
+      const extraVSCode = await this.scrapeVSCodeFresh();
+      signals.push(...extraVSCode.slice(0, 5 - platformCounts.VSCode));
+    }
+
     console.log(`\n📊 总计采集: ${signals.length} 个信号\n`);
     return signals;
+  }
+
+  // Chrome Web Store 直接采集（新增）
+  private async fetchChromeWebStoreSignals(): Promise<PainSignal[]> {
+    console.log('   [WebStore] 正在从 Chrome Web Store 直接采集信号...');
+    try {
+      // 搜索 Chrome 商店中差评/崩溃的插件
+      const badReviewQueries = [
+        { q: 'site:chromewebstore.google.com "one star" "broken" manifest v3', category: 'WebStore差评' },
+        { q: 'site:chromewebstore.google.com "not working" "2026"', category: 'WebStore失效' },
+        { q: 'site:chromewebstore.google.com review "useless" extension', category: 'WebStore抱怨' }
+      ];
+      
+      const results: PainSignal[] = [];
+      for (const { q, category } of badReviewQueries) {
+        const response = await this.serperClient.post('', { q, num: 8 });
+        const items = response.data?.organic || [];
+        for (const item of items.slice(0, 3)) {
+          results.push({
+            platform: 'Chrome-WebStore',
+            title: `[${category}] ${item.title || 'Chrome插件投诉'}`,
+            description: (item.snippet || '').substring(0, 400),
+            url: item.link || '',
+            sentiment: 'negative',
+            source: 'chrome-webstore-direct',
+            timestamp: new Date()
+          });
+        }
+      }
+      console.log(`   [WebStore] 采集到 ${results.length} 个 Chrome 商店信号`);
+      return results;
+    } catch (error) {
+      console.error(`   ⚠️ Chrome Web Store 直接采集失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      return [];
+    }
+  }
+
+  // VSCode 补充采集（新鲜度优先）
+  private async scrapeVSCodeFresh(): Promise<PainSignal[]> {
+    try {
+      const client = this.http.createClient();
+      const response = await client.post(
+        'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery?api-version=7.2-preview.1',
+        {
+          filters: [{
+            criteria: [
+              { filterType: 7, value: 'Microsoft.VisualStudio.Code' },
+              { filterType: 8, value: 'latest' }
+            ],
+            pageNumber: 1,
+            pageSize: 20,
+            sortBy: 4,      // 热度上升最快
+            sortOrder: 4    // 上升趋势
+          }],
+          flags: 914
+        },
+        { 
+          headers: { 
+            'Accept': 'application/json; charset=utf-8; api-version=7.2-preview.1',
+            'Content-Type': 'application/json'
+          } 
+        }
+      );
+      const extensions = response.data?.results?.[0]?.extensions || [];
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return extensions
+        .filter((ext: any) => new Date(ext.lastUpdated) > oneWeekAgo)
+        .slice(0, 10)
+        .map((ext: any) => ({
+          platform: 'VSCode',
+          title: ext.displayName || ext.extensionName,
+          description: (ext.shortDescription || '').replace(/<[^>]*>/g, ''),
+          url: `https://marketplace.visualstudio.com/items?itemName=${ext.extensionName}`,
+          sentiment: 'neutral',
+          source: 'vscode-marketplace-fresh',
+          timestamp: new Date()
+        }));
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -1472,8 +1592,13 @@ class OpportunityHunter {
       // 存储机会数据供邮件发送使用
       this.setProcessedOpportunities(opportunities);
 
-      // 发送邮件通知
-      await this.sendEmailReport(result, goldens, totalElapsed);
+      // 发送邮件通知（独立 try-catch，不影响主流程）
+      try {
+        const totalElapsed = ((Date.now() - totalStartTime) / 1000).toFixed(2);
+        await this.sendEmailReport(result, goldens, totalElapsed);
+      } catch (emailError) {
+        console.error(`   ⚠️ 邮件发送失败（不影响脚本退出）: ${emailError instanceof Error ? emailError.message : '未知错误'}`);
+      }
 
     } catch (error) {
       result.success = false;
@@ -1484,7 +1609,7 @@ class OpportunityHunter {
       }
     }
 
-    // 最终汇总
+    // 最终汇总（所有变量提供默认值）
     const totalElapsed = ((Date.now() - totalStartTime) / 1000).toFixed(2);
     console.log('\n' + '='.repeat(60));
     if (result.goldensCount > 0) {
@@ -1493,9 +1618,9 @@ class OpportunityHunter {
       console.log('✅ Scan completed: No high-value opportunities found.');
     }
     console.log('='.repeat(60));
-    console.log(`📊 总耗时: ${totalElapsed}s`);
-    console.log(`📊 总信号: ${result.signalsCount} | 达标: ${result.goldensCount}`);
-    console.log(`📊 Issues 创建: ${result.issuesCreated}`);
+    console.log(`📊 总耗时: ${totalElapsed || '0'}s`);
+    console.log(`📊 总信号: ${result.signalsCount || 0} | 达标: ${result.goldensCount || 0}`);
+    console.log(`📊 Issues 创建: ${result.issuesCreated || 0}`);
     if (result.errors.length > 0) {
       console.log(`📊 错误数: ${result.errors.length}`);
     }
