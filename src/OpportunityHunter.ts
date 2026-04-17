@@ -32,7 +32,7 @@ interface EnvConfig {
   SERPER_API_KEY: string;
   DOUBAO_API_KEY: string;
   DEEPSEEK_API_KEY: string;
-  GITHUB_TOKEN?: string;
+  GITHUB_TOKEN: string;
   SMTP_CONFIGURED: boolean;
 }
 
@@ -46,15 +46,18 @@ function validateEnvironment(): EnvConfig {
   const serper = process.env.SERPER_API_KEY;
   const doubao = process.env.DOUBAO_API_KEY;
   const deepseek = process.env.DEEPSEEK_API_KEY;
+  const githubToken = process.env.GITHUB_TOKEN;
 
   // 只显示前4位，保护敏感信息
   console.log(`   SERPER_API_KEY: ${serper ? '✅ 已配置 (' + serper.substring(0, 4) + '...)' : '❌ 未配置'}`);
   console.log(`   DOUBAO_API_KEY: ${doubao ? '✅ 已配置 (' + doubao.substring(0, 4) + '...)' : '❌ 未配置'}`);
   console.log(`   DEEPSEEK_API_KEY: ${deepseek ? '✅ 已配置 (' + deepseek.substring(0, 4) + '...)' : '❌ 未配置'}`);
+  console.log(`   GITHUB_TOKEN: ${githubToken ? '✅ 已配置 (' + githubToken.substring(0, 4) + '...)' : '❌ 未配置'}`);
 
   if (!serper) errors.push('Error: Environment variable SERPER_API_KEY is missing.');
   if (!doubao) errors.push('Error: Environment variable DOUBAO_API_KEY is missing.');
   if (!deepseek) errors.push('Error: Environment variable DEEPSEEK_API_KEY is missing.');
+  if (!githubToken) errors.push('Error: Environment variable GITHUB_TOKEN is missing.');
 
   if (errors.length > 0) {
     process.stderr.write('\n❌ 环境变量检查失败:\n');
@@ -71,7 +74,7 @@ function validateEnvironment(): EnvConfig {
     SERPER_API_KEY: serper!,
     DOUBAO_API_KEY: doubao!,
     DEEPSEEK_API_KEY: deepseek!,
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_TOKEN: githubToken!,
     SMTP_CONFIGURED: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   };
 }
@@ -131,6 +134,129 @@ const USER_AGENTS = [
 
 // 并发控制
 const CONCURRENCY_LIMIT = pLimit(3);
+
+// ============================================================
+// 安全保险丝 - Memory 文件管理
+// ============================================================
+interface MemoryData {
+  last_run_time: string | null;
+  consecutive_errors: number;
+  daily_api_calls: number;
+  last_api_reset: string;
+}
+
+const MEMORY_FILE = '/app/logs/memory.json';
+const RUN_INTERVAL_MS = 60 * 60 * 1000; // 1小时
+const MAX_DAILY_API_BUDGET = 100; // 每日 API 调用上限
+const MAX_CONSECUTIVE_ERRORS = 3;
+const SERPER_COST_PER_QUERY = 5; // 每次查询预估消耗
+
+function loadMemory(): MemoryData {
+  try {
+    if (fs.existsSync(MEMORY_FILE)) {
+      const data = fs.readFileSync(MEMORY_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.warn('⚠️ 无法读取 memory.json，将创建新的:', err);
+  }
+  return {
+    last_run_time: null,
+    consecutive_errors: 0,
+    daily_api_calls: 0,
+    last_api_reset: new Date().toISOString().split('T')[0]
+  };
+}
+
+function saveMemory(memory: MemoryData): void {
+  try {
+    const dir = path.dirname(MEMORY_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
+  } catch (err) {
+    console.error('⚠️ 无法保存 memory.json:', err);
+  }
+}
+
+function checkRunInterval(memory: MemoryData): boolean {
+  if (!memory.last_run_time) {
+    console.log('📅 首次运行，跳过间隔检查');
+    return true;
+  }
+  
+  const lastRun = new Date(memory.last_run_time).getTime();
+  const now = Date.now();
+  const elapsed = now - lastRun;
+  
+  if (elapsed < RUN_INTERVAL_MS) {
+    const remaining = Math.ceil((RUN_INTERVAL_MS - elapsed) / 60000);
+    console.log(`⏰ 安全保险丝触发: 距离上次运行不足 1 小时`);
+    console.log(`   上次运行: ${memory.last_run_time}`);
+    console.log(`   需等待: ${remaining} 分钟`);
+    console.log('🛡️ 进程安全退出');
+    return false;
+  }
+  
+  console.log(`📅 距离上次运行: ${Math.floor(elapsed / 60000)} 分钟，间隔检查通过`);
+  return true;
+}
+
+function checkApiBudget(memory: MemoryData, estimatedCalls: number): void {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 重置每日计数
+  if (memory.last_api_reset !== today) {
+    memory.daily_api_calls = 0;
+    memory.last_api_reset = today;
+  }
+  
+  const projectedTotal = memory.daily_api_calls + estimatedCalls;
+  
+  console.log('💰 API 预算检查:');
+  console.log(`   今日已用: ${memory.daily_api_calls} / ${MAX_DAILY_API_BUDGET}`);
+  console.log(`   本次预计: +${estimatedCalls} (每次 ~${SERPER_COST_PER_QUERY})`);
+  console.log(`   预计总计: ${projectedTotal}`);
+  
+  if (projectedTotal > MAX_DAILY_API_BUDGET) {
+    console.warn('⚠️⚠️⚠️ API 预算预警: 本次扫描将超过每日额度上限!');
+    console.warn(`   当前已用: ${memory.daily_api_calls}`);
+    console.warn(`   本次消耗: ~${estimatedCalls * SERPER_COST_PER_QUERY}`);
+    console.warn(`   剩余额度: ${MAX_DAILY_API_BUDGET - memory.daily_api_calls}`);
+    console.warn(`   请考虑设置 MAX_DAILY_API_BUDGET 环境变量`);
+  } else {
+    console.log(`   预算状态: ✅ 安全 (剩余 ${MAX_DAILY_API_BUDGET - projectedTotal})`);
+  }
+}
+
+function handleError(memory: MemoryData): MemoryData {
+  memory.consecutive_errors += 1;
+  console.log(`⚠️ 连续错误计数: ${memory.consecutive_errors} / ${MAX_CONSECUTIVE_ERRORS}`);
+  
+  if (memory.consecutive_errors >= MAX_CONSECUTIVE_ERRORS) {
+    console.error('🚨🚨🚨 连续错误达到上限，进入休眠模式');
+    console.error(`   连续失败: ${memory.consecutive_errors} 次`);
+    console.error(`   请检查日志并手动干预`);
+    
+    // 发送紧急邮件（如果配置了）
+    if (ENV.SMTP_CONFIGURED) {
+      console.log('📧 尝试发送紧急报警邮件...');
+      // 邮件发送逻辑将在后续实现
+    }
+    
+    // 休眠直到手动干预
+    process.exit(1);
+  }
+  
+  return memory;
+}
+
+function onSuccess(memory: MemoryData): MemoryData {
+  memory.consecutive_errors = 0; // 重置错误计数
+  memory.last_run_time = new Date().toISOString();
+  return memory;
+}
 
 // ============================================================
 // 类型定义
@@ -380,7 +506,7 @@ class Fetchers {
       console.log('   └─ 正在请求 VSCode Marketplace API...');
       const client = this.http.createClient();
       const response = await client.post(
-        'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery',
+        'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery?api-version=7.2-preview.1',
         {
           filters: [{
             criteria: [
@@ -390,11 +516,16 @@ class Fetchers {
             pageNumber: 1,
             pageSize: 30,
             sortBy: 4,
-            sortOrder: 2
+            sortOrder: 4
           }],
           flags: 914
         },
-        { headers: { 'api-version': '3.0-preview.1', 'Content-Type': 'application/json' } }
+        { 
+          headers: { 
+            'Accept': 'application/json; charset=utf-8; api-version=7.2-preview.1',
+            'Content-Type': 'application/json'
+          } 
+        }
       );
       console.log('   └─ 收到响应，正在解析扩展数据...');
 
@@ -420,10 +551,202 @@ class Fetchers {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
       console.log(`✅ [Stage 1-3] VSCode Marketplace query completed in ${elapsed}s. Found ${results.length} extensions.`);
       return results;
-    } catch (error) {
+    } catch (error: any) {
       process.stderr.write(`   ❌ ${handleAxiosError(error, 'VSCode 抓取')}\n`);
+      
+      // 打印完整错误响应 headers 用于分析微软防爬策略
+      if (error.response?.status) {
+        console.error('=== VSCode API 错误响应 Headers ===');
+        console.error(JSON.stringify(error.response.headers, null, 2));
+        console.error('===================================');
+      }
+      if (error.response?.data) {
+        console.error('=== VSCode API 错误响应 Body ===');
+        console.error(JSON.stringify(error.response.data, null, 2));
+        console.error('===================================');
+      }
       return [];
     }
+  }
+
+  // ============================================================
+  // Chrome MV3 金矿猎杀模块 - 专项监控5大流血领域
+  // ============================================================
+  async fetchChromeMV3GoldSignals(): Promise<PainSignal[]> {
+    console.log('\n🏆 [Stage 1-5] Starting Chrome MV3 Gold Hunt...');
+    const startTime = Date.now();
+
+    // 5个金矿关键词
+    const goldTargets = [
+      { q: 'alternative to ModHeader Manifest V3', tag: 'ModHeader替代', weight: 'HIGH' },
+      { q: 'WhatsApp web chat export broken chrome 2026', tag: 'WhatsApp数据导出', weight: 'HIGH' },
+      { q: 'LLM context copy Markdown extension error', tag: 'LLM上下文导出', weight: 'HIGH' },
+      { q: 'Auto refresh tab keep awake MV3 workaround', tag: 'Tab保活', weight: 'MEDIUM' },
+      { q: 'lightweight API token counter chrome extension', tag: 'API计数', weight: 'MEDIUM' }
+    ];
+
+    // 情绪关键词过滤
+    const negativePhrases = ['broken', 'useless now', 'paid subscription too expensive', 
+                              'not working', 'stopped working', 'broken by update',
+                              'too expensive', 'migration failed', 'no alternative'];
+    const isNegative = (text: string) => negativePhrases.some(p => text.toLowerCase().includes(p));
+
+    const results: PainSignal[] = [];
+
+    for (let i = 0; i < goldTargets.length; i++) {
+      const { q, tag, weight } = goldTargets[i];
+      console.log(`   [${i + 1}/${goldTargets.length}] [${weight}] ${tag}: ${q}`);
+
+      try {
+        // 使用 Serper 搜索，过去24小时内容
+        const response = await this.serperClient.post('', { 
+          q,
+          num: 10,
+          tbs: 'qdr:d'  // 过去24小时
+        });
+        const items = response.data?.organic || [];
+
+        for (const item of items.slice(0, 4)) {
+          const title = item.title || '';
+          const snippet = item.snippet || '';
+          const url = item.link || '';
+          
+          // 仅保留包含负面情绪的内容
+          if (isNegative(title) || isNegative(snippet)) {
+            results.push({
+              platform: 'Chrome-MV3-GOLD',
+              title: `[MV3_GOLD_HUNT][${weight}] ${tag}: ${title}`,
+              description: `[情绪来源: ${url}] ${snippet}`.substring(0, 400),
+              url,
+              sentiment: 'negative',
+              source: 'serper-mv3-gold',
+              timestamp: new Date()
+            });
+            console.log(`      └─ 🎯 捕获负面信号: ${title.substring(0, 50)}...`);
+          }
+        }
+      } catch (error) {
+        process.stderr.write(`      ❌ ${handleAxiosError(error, `MV3 Gold [${tag}]`)}\n`);
+      }
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ [Stage 1-5] Chrome MV3 Gold Hunt completed in ${elapsed}s. Found ${results.length} gold signals.`);
+    return results;
+  }
+
+  // ============================================================
+  // Chrome MV3 猎杀模块 - Manifest V3 专项搜索
+  // ============================================================
+  async fetchChromeMV3Signals(): Promise<PainSignal[]> {
+    console.log('\n🔴 [Stage 1-6] Starting Chrome MV3 Signals Hunt...');
+    const startTime = Date.now();
+
+    const queries = [
+      { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3替代' },
+      { q: '"uBlock Origin" replacement chrome 2026', category: 'uBlock替代' },
+      { q: 'site:reddit.com "broken" chrome extension', category: 'Reddit怨气' }
+    ];
+
+    const results: PainSignal[] = [];
+
+    for (let i = 0; i < queries.length; i++) {
+      const { q, category } = queries[i];
+      console.log(`   [${i + 1}/${queries.length}] [${category}] ${q}`);
+
+      try {
+        const response = await this.serperClient.post('', { q, num: 10 });
+        const items = response.data?.organic || [];
+
+        for (const item of items.slice(0, 5)) {
+          results.push({
+            platform: 'Chrome-MV3',
+            title: `[CHROME_MV3_HUNT][${category}] ${item.title || ''}`,
+            description: `${item.snippet || ''}`.substring(0, 400),
+            url: item.link || '',
+            sentiment: this.analyzeSentiment(item.snippet || ''),
+            source: 'serper-mv3',
+            timestamp: new Date()
+          });
+        }
+      } catch (error) {
+        process.stderr.write(`      ❌ ${handleAxiosError(error, `MV3 [${category}]`)}\n`);
+      }
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ [Stage 1-6] Chrome MV3 Signals Hunt completed in ${elapsed}s. Found ${results.length} signals.`);
+    return results;
+  }
+
+  // ============================================================
+  // Chrome MV3 "猎杀"模块 - 三维度废墟扫描
+  // ============================================================
+  async fetchChromeSignals(): Promise<PainSignal[]> {
+    console.log('\n🔴 [Stage 1-4] Starting Chrome MV3 Hunt...');
+    const startTime = Date.now();
+
+    const queries = [
+      // MV3 崩盘替代（核心情报）
+      { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3崩盘' },
+      { q: '"uBlock Origin" replacement chrome 2026', category: 'MV3崩盘' },
+      { q: '"broken after update" extension reddit', category: 'MV3崩盘' },
+      { q: 'site:reddit.com "Manifest V3" broken extension', category: 'MV3崩盘' },
+      
+      // 极简主义套利
+      { q: '"lightweight" chrome extension for productivity', category: '极简主义' },
+      { q: '"simple" word counter "right click" chrome', category: '极简主义' },
+      { q: '"no popup" dictionary extension chrome', category: '极简主义' },
+      { q: 'minimal chrome extension alternative', category: '极简主义' },
+      
+      // 定价套利（订阅制厌恶）
+      { q: '"one-time fee" chrome extension', category: '定价套利' },
+      { q: '"lifetime deal" browser tool extension', category: '定价套利' },
+      { q: '"free alternative to" Grammarly chrome', category: '定价套利' },
+      { q: '"free alternative to" Loom chrome extension', category: '定价套利' },
+      { q: '"too expensive" chrome extension reddit', category: '定价套利' }
+    ];
+
+    const results: PainSignal[] = [];
+
+    for (let i = 0; i < queries.length; i++) {
+      const { q, category } = queries[i];
+      console.log(`   [${i + 1}/${queries.length}] [${category}] ${q.substring(0, 35)}...`);
+
+      try {
+        const response = await this.serperClient.post('', { q, num: 8 });
+        const items = response.data?.organic || [];
+
+        for (const item of items.slice(0, 3)) {
+          const title = item.title || '';
+          const snippet = item.snippet || '';
+
+          // 提取被替代的产品名
+          const altMatch = snippet.match(/alternative to ["']?([A-Za-z0-9\s]+?)["']?\s*(?:extension|chrome|plugin)/i);
+          const targetProduct = altMatch ? altMatch[1].trim() : '';
+
+          results.push({
+            platform: 'Chrome-MV3',
+            title: `[CHROME_V3_HUNT][${category}] ${title}`,
+            description: `[需求类型: ${category}]${targetProduct ? ` 替代品目标: ${targetProduct}` : ''} | ${snippet}`.substring(0, 400),
+            url: item.link || '',
+            sentiment: this.analyzeSentiment(snippet),
+            source: 'serper-chrome-mv3',
+            timestamp: new Date()
+          });
+
+          if (targetProduct) {
+            console.log(`      └─ [${category}] 机会: 替代 "${targetProduct}"`);
+          }
+        }
+      } catch (error) {
+        process.stderr.write(`      ❌ ${handleAxiosError(error, `Chrome MV3 [${q.substring(0, 25)}...]`)}\n`);
+      }
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ [Stage 1-4] Chrome MV3 Hunt completed in ${elapsed}s. Found ${results.length} signals.`);
+    return results;
   }
 
   private analyzeSentiment(text: string): 'negative' | 'neutral' | 'positive' {
@@ -481,7 +804,7 @@ class DoubaoAgent {
     console.log(`   [AI-1] Starting Doubao analysis for: ${signal.title.substring(0, 30)}...`);
     const startTime = Date.now();
 
-    const prompt = `你是一位精通中文互联网的定价策略师，擅长发现"定价套利"机会。
+    const prompt = `你是一位增长黑客，专门评估"替代成本"和 SEO 抢占策略。
 
 【商机信号】
 平台: ${signal.platform}
@@ -489,34 +812,79 @@ class DoubaoAgent {
 描述: ${signal.description}
 用户情绪: ${signal.sentiment}
 
-【任务 - 定价套利逻辑 + SEO意图分析】
+【核心任务 - 替代成本评估 + SEO 抢占策略 + 产品命名算法】
 
-1. 提取信号中的意图关键词 (5-8个):
+1. 替代成本分析:
+   - 用户正在搜索哪个竞品的替代品？
+   - 该竞品被用户如何评价（评分、评论）？
+   - 用户切换到我们的成本有多高？
+
+2. SEO 命名算法 (核心新增 - 三个命名公式):
+   基于【寄生平台 SEO 习惯】，请给出 3 个产品命名建议：
+   
+   - 命名公式 A（截流型）：[竞品名称] Alternative: [核心功能描述]
+     例: ModHeader Alternative: Lightweight Header Modifier
+   
+   - 命名公式 B（直击痛点型）：Clean [功能词] - No [用户讨厌的痛点]
+     例: Clean Headers - No Popup Spam
+   
+   - 命名公式 C（极简型）：[核心动作] to [目标格式/结果]
+     例: Page to Markdown, Chat to PDF, Tab to Notes
+
+3. SEO 抢占策略:
+   - 在评分均低于 3.0 的搜索结果中，如果我们首发获得 5 个 5 星��价
+   - 能否在 1 周内冲上搜索第一页？
+
+4. 意图关键词提取 (5-8个):
    - 用户在搜索时会用什么词？
    - 长尾词机会在哪里？
 
-2. 分析使用频率 (1-10分):
+5. 使用频率分析 (1-10分):
    - 如果 < 3，说明用户可能只是"一次性需求"
    - 这类需求适合"买断制"而非"订阅制"
 
-3. 检查搜索意图是否包含 one-time:
-   - "one-time purchase", "一次性", "买断", "永久授权"
-   - 如果是 → 标记为【高转化潜力】
-
-4. 定价套利逻辑:
+6. 定价套利逻辑:
    - 对比同类产品的定价
    - 找出价格洼地或溢价空间
-   - 计算 arbitrage potential (高/中/低)
+
+7. 隐私评分:
+   - 评估该功能是否可以用【局部权限(ActiveTab)】实现
+   - 如果可以 → 预估转化率提升50%
+
+8. 最终判决:
+   - TARGET_ACQUIRED: 替代成本低 + SEO 可抢占 + 隐私友好
+   - PROCEED: 增长可行
+   - REVIEW: 需要进一步验证
 
 【输出格式】(仅JSON，不要其他内容)
 {
+  "targetCompetitor": "竞品名称或null",
+  "switchCost": "low或medium或high",
+  "namingSuggestions": {
+    "formulaA": "[竞品] Alternative: [功能描述]",
+    "formulaB": "Clean [功能词] - No [痛点]",
+    "formulaC": "[动作] to [目标格式]"
+  },
+  "bestNamingForSEO": "formulaA或formulaB或formulaC",
+  "namingSEOWeightRanking": {
+    "formulaA_rank": 1-10,
+    "formulaB_rank": 1-10,
+    "formulaC_rank": 1-10,
+    "bestForChromeStore": "formulaA或formulaB或formulaC",
+    "seoWeightReason": "哪个命名在Chrome商店自然搜索权重最高的理由"
+  },
+  "seoActionItems": ["行动项1", "行动项2"],
+  "weekOneGoal": "第一周SEO目标描述",
   "intentKeywords": ["关键词1", "关键词2"],
   "isOneTimeUse": true或false,
   "frequencyScore": 1-10,
   "seoIntentVolume": 1000-100000,
   "highConversionPotential": true或false,
   "pricingArbitrage": "high或medium或low",
-  "analysis": "定价套利理由（50字内）"
+  "privacyScore": 1-10,
+  "conversionBoostPercent": 0-100,
+  "finalVerdict": "TARGET_ACQUIRED或PROCEED或REVIEW",
+  "analysis": "增长分析（80字内）"
 }`;
 
     try {
@@ -588,49 +956,66 @@ class DeepSeekAgent {
     console.log(`   [AI-2] Starting DeepSeek evaluation for: ${signal.title.substring(0, 30)}...`);
     const startTime = Date.now();
 
-    const prompt = `你是一位冷酷的 CTO，专门扫描技术风险红线。
+    const prompt = `你是一位 Chrome Extension 架构师，专门评估 MV3 可行性红利。
 
 【商机信号】
 平台: ${signal.platform}
 标题: ${signal.title}
 描述: ${signal.description}
 
-【任务 - Sherlock 风险评分】
+【核心任务 - MV3 可行性红利评估 + SidePanel 判定】
 
-1. 安全红线检查:
-   - 是否需要访问用户敏感数据 (密码、支付信息)?
-   - 是否涉及第三方 API 密钥管理?
-   - 是否有数据泄露风险?
+1. 核心问题（必须回答）:
+   该功能是否能完全利用 Chrome MV3 的 SidePanel API 实现？
+   - sidePanel.setPanelBehavior 能否处理该交互流程？
+   - 是否需要配合 offscreen 或 service worker？
+   - 给出【是/否/部分】判定
 
-2. 基础设施红线检查:
-   - 是否依赖可能崩溃的未稳定 API?
-   - 是否有单点故障风险?
-   - 是否需要高并发基础设施?
+2. 痛点溯源分析:
+   - 该痛点是否源于老插件无法适配 Manifest V3？
+   - 老牌插件(如uBlock、ModHeader)是否因架构锁定而无法迁移？
+   - 用户正在寻找什么替代品？
 
-3. 计算综合风险分 (0-100):
-   - 平台封禁风险 (1-10) × 20
-   - 技术复杂度 (1-10) × 15
-   - 安全漏洞 (0-10) × 25
-   - 基础设施依赖 (0-10) × 15
+3. 技术可行性评估:
+   - 如果使用 chrome.sidePanel API，是否能实现该功能？
+   - 如果使用 chrome.offscreen API 处理后台任务，是否可行？
+   - 能否用【局部权限(ActiveTab)】替代【全站权限】？
+   - 若能用局部权限 → 风险分直接降低 40分
 
-4. 技术债清单:
-   - 列出 2-3 个潜在技术债
+4. 架构优势判断:
+   - 我们的轻量级 MV3 实现 vs 老牌插件的臃肿 MV3 移植版
+   - 评分差距: 功能完整度 vs 权限占用
 
-5. 判决:
-   - PROCEED: 风险 < 40
-   - REVIEW: 风险 40-70
-   - REJECT: 风险 > 70
+5. 风险评分 (0-100):
+   - 基础风险 (1-10) × 10
+   - MV3迁移难度 (0-10) × 15
+   - 权限复杂度 (0-10) × 15
+   - 若能用局部权限 → 总分扣减 40分
+   - 若老牌巨头无法迁移 → 再扣 15分
+
+6. 判决:
+   - TARGET_ACQUIRED: 老牌巨头无法适配 MV3 + 我们能用局部权限实现 → 极高确定性机会
+   - PROCEED: 技术可行，风险可控
+   - REVIEW: 需要进一步技术验证
+   - REJECT: MV3 无法实现该功能
 
 【输出格式】(仅JSON，不要其他内容)
 {
+  "sidePanelFullyFeasible": "是或否或部分",
+  "sidePanelVerdict": "该功能是否能完全利用 SidePanel API 的判定理由",
+  "painSourceMv3Related": true或false,
+  "giantCannotMigrate": true或false,
+  "mv3Architecture": {
+    "sidePanelFeasible": true或false,
+    "offscreenFeasible": true或false,
+    "localPermissionAchievable": true或false,
+    "alternativeApproach": "替代实现方案描述"
+  },
+  "permissionBonus": 0-40,
+  "giantBonus": 0-15,
   "total": 0-100,
-  "securityRedLine": true或false,
-  "infraRedLine": true或false,
-  "platformBanRisk": 1-10,
-  "techComplexity": 1-10,
-  "technicalDebt": ["债1", "债2"],
-  "verdict": "PROCEED或REVIEW或REJECT",
-  "reasoning": "CTO点评（60字内）"
+  "verdict": "TARGET_ACQUIRED或PROCEED或REVIEW或REJECT",
+  "reasoning": "架构师点评（100字内）"
 }`;
 
     try {
@@ -673,7 +1058,7 @@ class DeepSeekAgent {
         platformBanRisk: Number(data.platformBanRisk) || 5,
         techComplexity: Number(data.techComplexity) || 5,
         technicalDebt: Array.isArray(data.technicalDebt) ? data.technicalDebt : [],
-        verdict: ['PROCEED', 'REVIEW', 'REJECT'].includes(data.verdict)
+        verdict: ['TARGET_ACQUIRED', 'PROCEED', 'REVIEW', 'REJECT'].includes(data.verdict)
           ? data.verdict : 'REVIEW',
         reasoning: String(data.reasoning || '')
       };
@@ -684,14 +1069,14 @@ class DeepSeekAgent {
 
   private getMock(): SherlockRiskScore {
     return {
-      total: 35,
+      total: 20,
       securityRedLine: false,
       infraRedLine: false,
-      platformBanRisk: 4,
-      techComplexity: 6,
-      technicalDebt: ['API 版本兼容性', '错误处理不完善'],
-      verdict: 'PROCEED',
-      reasoning: '风险可控，适合 MVP 快速验证'
+      platformBanRisk: 2,
+      techComplexity: 4,
+      technicalDebt: ['MV3 API 兼容性', 'Chrome Web Store 审核'],
+      verdict: 'TARGET_ACQUIRED',
+      reasoning: '老牌插件无法迁移MV3，我们用局部权限可实现，极低风险'
     };
   }
 }
@@ -911,27 +1296,20 @@ class PricingGenerator {
 // GitHub Issue 创建器
 // ============================================================
 class GitHubIssueCreator {
-  private client: AxiosInstance | null = null;
+  private client: AxiosInstance;
 
   constructor() {
-    if (ENV.GITHUB_TOKEN) {
-      this.client = axios.create({
-        baseURL: 'https://api.github.com',
-        headers: {
-          'Authorization': `Bearer ${ENV.GITHUB_TOKEN}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28'
-        }
-      });
-    }
+    this.client = axios.create({
+      baseURL: 'https://api.github.com',
+      headers: {
+        'Authorization': `Bearer ${ENV.GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
   }
 
   async create(opp: GoldenOpportunity): Promise<boolean> {
-    if (!this.client) {
-      console.log('   ⚠️ 未配置 GITHUB_TOKEN，跳过 Issue 创建');
-      return false;
-    }
-
     const payload = {
       title: `[GOLDEN_OPPORTUNITY] ${opp.signal.platform} - ${opp.signal.title.substring(0, 50)}`,
       body: this.generateBody(opp),
@@ -1306,6 +1684,19 @@ async function main(): Promise<void> {
   console.log('🚀 Opportunity Hunter 启动中...');
   console.log('========================================');
 
+  // ========== 安全保险丝检查 ==========
+  console.log('🛡️ 执行安全保险丝检查...');
+  const memory = loadMemory();
+  
+  // 1. 运行间隔检查
+  if (!checkRunInterval(memory)) {
+    console.log('⏰ 安全退出: 运行间隔不足');
+    process.exit(0);
+  }
+  
+  // 2. API 预算预警（预估 10 次查询）
+  checkApiBudget(memory, 10);
+
   try {
     console.log('⏳ 初始化 OpportunityHunter 实例...');
     const hunter = new OpportunityHunter();
@@ -1330,8 +1721,16 @@ async function main(): Promise<void> {
 
     if (!result.success) {
       console.error('\n❌ 扫描未成功完成，退出码 1');
+      // 更新 memory - 错误计数
+      const updatedMemory = handleError(memory);
+      saveMemory(updatedMemory);
       process.exit(1);
     }
+
+    // 成功 - 更新 memory
+    const successMemory = onSuccess(memory);
+    successMemory.daily_api_calls += 10; // 预估实际使用量
+    saveMemory(successMemory);
 
     console.log('\n✅ 扫描任务完成，退出码 0\n');
     process.exit(0);
@@ -1347,6 +1746,11 @@ async function main(): Promise<void> {
     console.error('========================================\n');
     console.error('请检查环境变量配置和网络连接。');
     console.error('如问题持续，请在 GitHub Issues 反馈。\n');
+    
+    // 更新 memory - 错误计数
+    const errorMemory = handleError(memory);
+    saveMemory(errorMemory);
+    
     process.exit(1);
   }
 }
