@@ -24,6 +24,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pLimit from 'p-limit';
 import { EmailService } from './EmailService.js';
+import {
+  fetchHackerNewsTrends,
+  fetchGitHubTrending,
+  fetchStackOverflowPainPoints,
+  TrendingSignal
+} from './fetchers/trendingFetcher.js';
+import {
+  computeFinalScore,
+  type SoloHackerPenaltyResult
+} from './analyzers/scoringEngine.js';
 
 // ============================================================
 // 环境变量验证
@@ -270,6 +280,8 @@ interface PainSignal {
   rawComments?: string[];
   source: string;
   timestamp: Date;
+  category?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface SEOAnalysis {
@@ -315,6 +327,14 @@ interface CrossValidation {
   debateSummary: string;
 }
 
+interface ScoringResult {
+  adjustedRiskTotal: number;
+  originalRiskTotal: number;
+  soloHackerPenalty: SoloHackerPenaltyResult;
+  worthPursuing: boolean;
+  verdict: string;
+}
+
 interface GoldenOpportunity {
   id: string;
   signal: PainSignal;
@@ -323,6 +343,7 @@ interface GoldenOpportunity {
   pricing: PricingStrategy;
   vulnerability: VulnerabilityPoint;
   crossValidation: CrossValidation;
+  scoringResult: ScoringResult;
   qualified: boolean;
 }
 
@@ -417,10 +438,15 @@ class Fetchers {
     const startTime = Date.now();
 
     const queries = [
-      { q: 'site:reddit.com Shopify broken OR frustrated OR waste of money', platform: 'Reddit' },
-      { q: 'site:reddit.com "VSCode extension" missing OR bug OR slow', platform: 'Reddit' },
-      { q: 'site:reddit.com "Shopify app" scam OR misleading', platform: 'Reddit' },
-      { q: 'Shopify app "one time" OR "one-time" purchase OR lifetime deal', platform: 'General' }
+      // Reddit 多平台真实怨气（高信号纯度）
+      { q: 'site:reddit.com Shopify app broken OR frustrating OR "waste of money"', platform: 'Reddit' },
+      { q: 'site:reddit.com "VSCode extension" broken OR slow OR missing feature', platform: 'Reddit' },
+      { q: 'site:reddit.com Notion broken workflow OR automation fails', platform: 'Reddit' },
+      { q: 'site:reddit.com Zapier alternative OR "too expensive" OR broken', platform: 'Reddit' },
+      { q: 'site:reddit.com Chrome extension broken manifest v3 OR stopped working', platform: 'Reddit' },
+      // 独立开发者/一人公司赛道痛点
+      { q: '"looking for a tool like" but doesn\'t exist automation', platform: 'General' },
+      { q: 'shopify app "lifetime deal" OR "one-time" purchase broken', platform: 'General' }
     ];
 
     const results: PainSignal[] = [];
@@ -636,16 +662,20 @@ class Fetchers {
   }
 
   // ============================================================
-  // Chrome MV3 猎杀模块 - Manifest V3 专项搜索
+  // Chrome MV3 猎杀模块 - Manifest V3 专项搜索（补充角度）
   // ============================================================
   async fetchChromeMV3Signals(): Promise<PainSignal[]> {
-    console.log('\n🔴 [Stage 1-6] Starting Chrome MV3 Signals Hunt...');
+    console.log('\n🔴 [Stage 1-6] Starting Chrome MV3 Signals Hunt (supplementary)...');
     const startTime = Date.now();
 
+    // 补充角度（避免与 fetchChromeSignals 重复）：
+    // 1. GitHub Issues 真实崩溃投诉（信号纯度高）
+    // 2. Stack Overflow MV3 相关求助（零回答痛点）
+    // 3. 更广泛的"扩展停止工作"怨气
     const queries = [
-      { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3替代' },
-      { q: '"uBlock Origin" replacement chrome 2026', category: 'uBlock替代' },
-      { q: 'site:reddit.com "broken" chrome extension', category: 'Reddit怨气' }
+      { q: 'site:github.com "Manifest V3" "not working" issues', category: 'GitHubIssues' },
+      { q: 'site:stackoverflow.com "chrome.extension" "Manifest V3" broken', category: 'SO求助' },
+      { q: '"chrome extension" stopped working after update 2026', category: '扩展失效' }
     ];
 
     const results: PainSignal[] = [];
@@ -690,14 +720,12 @@ class Fetchers {
       // MV3 崩盘替代（核心情报）
       { q: '"alternative to" chrome extension "Manifest V3"', category: 'MV3替代' },
       { q: '"uBlock Origin" replacement chrome 2026', category: 'uBlock替代' },
-      
       // Chrome Web Store 直接差评搜索
       { q: 'site:chromewebstore.google.com "one star" "broken" "manifest v3"', category: 'WebStore差评' },
       { q: 'site:chromewebstore.google.com "not working" "2026"', category: 'WebStore失效' },
       { q: 'site:chromewebstore.google.com review "useless" "paid"', category: 'WebStore抱怨' },
-      
-      // Reddit 怨气（有噪音过滤）
-      { q: 'site:reddit.com "broken" chrome extension manifest v3 -scam -fake reviews', category: 'Reddit怨气' }
+      // Reddit 真实怨气（排除噪音）
+      { q: 'site:reddit.com "broken" chrome extension "manifest v3" -scam -fake reviews', category: 'Reddit怨气' }
     ];
 
     const results: PainSignal[] = [];
@@ -781,6 +809,48 @@ class Fetchers {
     }];
   }
 
+  private mapTrendingToPainSignal(t: TrendingSignal): PainSignal {
+    return {
+      platform: t.sourcePlatform,
+      title: t.title,
+      description: (t.metadata.description as string) ?? '',
+      url: t.url,
+      sentiment: 'neutral',
+      source: 'trending',
+      timestamp: new Date(),
+      metadata: t.metadata
+    };
+  }
+
+  private async fetchTrendingSignals(): Promise<PainSignal[]> {
+    console.log('\n[Trending] 启动 HN / GitHub / Stack Overflow 趋势采集...');
+    const startTime = Date.now();
+
+    const [hn, github, so] = await Promise.allSettled([
+      fetchHackerNewsTrends(),
+      fetchGitHubTrending(),
+      fetchStackOverflowPainPoints()
+    ]);
+
+    const hnSignals = hn.status === 'fulfilled' ? hn.value : [];
+    const githubSignals = github.status === 'fulfilled' ? github.value : [];
+    const soSignals = so.status === 'fulfilled' ? so.value : [];
+
+    const total = hnSignals.length + githubSignals.length + soSignals.length;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    console.log(`   [HN]       ${hnSignals.length} signals`);
+    console.log(`   [GitHub]   ${githubSignals.length} signals`);
+    console.log(`   [SO]       ${soSignals.length} signals`);
+    console.log(`   [Trending] 共 ${total} 条，耗时 ${elapsed}s`);
+
+    return [
+      ...hnSignals,
+      ...githubSignals,
+      ...soSignals
+    ].map(t => this.mapTrendingToPainSignal(t));
+  }
+
   async runAll(): Promise<PainSignal[]> {
     console.log('\n🚀 [Fetcher] 启动全平台扫描...\n');
 
@@ -788,12 +858,13 @@ class Fetchers {
       this.searchPainSignals(),
       this.scrapeShopify(),
       this.scrapeVSCode(),
-      this.fetchChromeWebStoreSignals() // 新增 Chrome Web Store 直接采集
+      this.fetchChromeWebStoreSignals(),
+      this.fetchTrendingSignals()
     ]);
 
     const signals: PainSignal[] = [];
-    const platformCounts = { Chrome: 0, Shopify: 0, VSCode: 0, Reddit: 0, Other: 0 };
-    
+    const platformCounts = { Chrome: 0, Shopify: 0, VSCode: 0, Reddit: 0, Trending: 0, Other: 0 };
+
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         signals.push(...result.value);
@@ -802,19 +873,20 @@ class Fetchers {
           else if (s.platform === 'Shopify') platformCounts.Shopify++;
           else if (s.platform === 'VSCode') platformCounts.VSCode++;
           else if (s.source?.includes('reddit')) platformCounts.Reddit++;
+          else if (s.source === 'trending') platformCounts.Trending++;
           else platformCounts.Other++;
         });
       } else {
-        console.error(`   ⚠️ 平台 ${['Serper', 'Shopify', 'VSCode', 'ChromeWebStore'][index]} 采集失败`);
+        console.error(`   ⚠️ 平台 ${['Serper', 'Shopify', 'VSCode', 'ChromeWebStore', 'Trending'][index]} 采集失败`);
       }
     });
 
     // 强制权重分配：确保 Chrome Web Store 和 VSCode 各至少 5 条
     const chromeSignals = signals.filter(s => s.platform?.includes('Chrome') || s.source === 'vscode-marketplace');
     const vscodeSignals = signals.filter(s => s.platform === 'VSCode' || s.source === 'vscode-marketplace');
-    
-    console.log(`   📊 当前分布: Chrome=${platformCounts.Chrome} | Shopify=${platformCounts.Shopify} | VSCode=${platformCounts.VSCode} | Reddit=${platformCounts.Reddit}`);
-    
+
+    console.log(`   📊 当前分布: Chrome=${platformCounts.Chrome} | Shopify=${platformCounts.Shopify} | VSCode=${platformCounts.VSCode} | Reddit=${platformCounts.Reddit} | Trending=${platformCounts.Trending}`);
+
     // 补充 Chrome 信号（如果不足 5 条）
     if (platformCounts.Chrome < 5) {
       console.log(`   ⚠️ Chrome 信号不足(${platformCounts.Chrome})，补充搜索...`);
@@ -1057,7 +1129,7 @@ class DoubaoAgent {
 
   private getMock(): SEOAnalysis {
     return {
-      intentKeywords: ['Shopify AI 描述生成', '批量产品优化', '一键翻译'],
+      intentKeywords: [],
       isOneTimeUse: true,
       frequencyScore: 2,
       seoIntentVolume: 8500,
@@ -1195,7 +1267,7 @@ class DeepSeekAgent {
       platformBanRisk: 2,
       techComplexity: 4,
       technicalDebt: ['MV3 API 兼容性', 'Chrome Web Store 审核'],
-      verdict: 'TARGET_ACQUIRED',
+      verdict: 'REVIEW',
       reasoning: '老牌插件无法迁移MV3，我们用局部权限可实现，极低风险'
     };
   }
@@ -1496,7 +1568,7 @@ class GitHubIssueCreator {
 ---
 
 ### 🔍 SEO Analysis
-- 意图关键词: ${opp.seoAnalysis.intentKeywords.join(', ')}
+- 意图关键词: ${(opp.seoAnalysis.intentKeywords ?? []).join(', ') || '（无）'}
 - 一次性使用: ${opp.seoAnalysis.isOneTimeUse ? '✅ 是' : '❌ 否'}
 - 使用频率: ${opp.seoAnalysis.frequencyScore}/10
 - 高转化潜力: ${opp.seoAnalysis.highConversionPotential ? '✅ 是' : '❌ 否'}
@@ -1636,11 +1708,14 @@ class OpportunityHunter {
       try {
         console.log(`\n📊 分析: ${signal.title.substring(0, 40)}...`);
 
-        // 豆包 + DeepSeek 并发
+        // 豆包 + DeepSeek 并行
         const [seo, risk] = await Promise.all([
           this.doubao.analyze(signal),
           this.deepseek.evaluate(signal)
         ]);
+
+        // 一人公司惩罚评分（基于规则的增量调整）
+        const scoringResult = computeFinalScore(signal, seo, risk);
 
         // 漏洞扫描
         const vulns = this.vulnScanner.scanComments([signal]);
@@ -1651,8 +1726,10 @@ class OpportunityHunter {
         // 辩论闭环
         const crossValidation = await this.debate.crossValidate(signal, seo, risk);
 
-        // 判断是否达标
-        const qualified = risk.verdict !== 'REJECT' && crossValidation.finalConsensus !== 'ABORT';
+        // 判断是否达标（综合 AI 判决 + 一人公司调整分）
+        const qualified = risk.verdict !== 'REJECT' &&
+          crossValidation.finalConsensus !== 'ABORT' &&
+          scoringResult.worthPursuing;
 
         const opp: GoldenOpportunity = {
           id: crypto.randomUUID(),
@@ -1662,6 +1739,7 @@ class OpportunityHunter {
           pricing,
           vulnerability: vulns[0] || { type: 'other', severity: 'low', affectedApps: [], exploitability: '无明显漏洞' },
           crossValidation,
+          scoringResult,
           qualified
         };
 
@@ -1669,7 +1747,7 @@ class OpportunityHunter {
 
         // 实时输出
         console.log(`   📈 SEO体量: ${seo.seoIntentVolume} | 高转化: ${seo.highConversionPotential ? '✅' : '❌'}`);
-        console.log(`   🛡️ 风险分: ${risk.total}/100 | 判决: ${risk.verdict}`);
+        console.log(`   🛡️ 风险分: ${scoringResult.originalRiskTotal}→${scoringResult.adjustedRiskTotal} | ${scoringResult.verdict}`);
         console.log(`   💰 定价: ${pricing.recommended} | ${pricing.priceRange}`);
         console.log(`   ⚔️ 共识: ${crossValidation.finalConsensus} | 达标: ${qualified ? '🎯 YES' : '❌ NO'}`);
 
@@ -1714,6 +1792,7 @@ class OpportunityHunter {
           goCount: goldens.filter(o => o.crossValidation.finalConsensus === 'GO').length,
           holdCount: goldens.filter(o => o.crossValidation.finalConsensus === 'HOLD').length
         },
+        scoringNote: 'adjustedRiskTotal = riskScore.total + SoloHackerPenalty (min 10)',
         opportunities: goldens
       };
 
@@ -1771,12 +1850,17 @@ class OpportunityHunter {
       lines.push(`平台: ${opp.signal.platform}`);
       lines.push(`标题: ${opp.signal.title}`);
       lines.push(`链接: ${opp.signal.url}`);
-      lines.push(`风险评分: ${opp.riskScore.total}/100`);
+      lines.push(`风险评分: ${opp.scoringResult.originalRiskTotal}→${opp.scoringResult.adjustedRiskTotal}`);
+      if (opp.scoringResult.soloHackerPenalty.triggered) {
+        lines.push(`⚠️ 一人公司警告: ${opp.scoringResult.soloHackerPenalty.reason}`);
+      }
       lines.push(`定价策略: ${opp.pricing.recommended} - ${opp.pricing.priceRange}`);
       lines.push(`SEO意图量: ${opp.seoAnalysis.seoIntentVolume}`);
       lines.push(`转化潜力: ${opp.seoAnalysis.highConversionPotential ? '高' : '中低'}`);
       lines.push(`套利级别: ${opp.seoAnalysis.pricingArbitrage}`);
-      lines.push(`意图关键词: ${opp.seoAnalysis.intentKeywords.join(', ')}`);
+      if (opp.seoAnalysis.intentKeywords.length > 0) {
+        lines.push(`意图关键词: ${opp.seoAnalysis.intentKeywords.join(', ')}`);
+      }
       lines.push(`CTO点评: ${opp.riskScore.reasoning}`);
       lines.push(`辩论结论: ${opp.crossValidation.finalConsensus}`);
       lines.push('');
