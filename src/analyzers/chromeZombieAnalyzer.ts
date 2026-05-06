@@ -12,7 +12,8 @@
 // 5. 崩溃密度 (30分): 评论中"not working"比例 -> 直接给满分
 // 6. 开发者无响应 (+10分): 用户提到开发者失联
 
-import type { ExtensionDetail, Review, ZombieTarget } from '../fetchers/chromeZombieFetcher.js';
+import type { ExtensionDetail, Review } from '../fetchers/chromeZombieFetcher.js';
+import type { ZombieTarget } from '../fetchers/freeChromeZombieFetcher.js';
 
 // ============================================================
 // 评分结果

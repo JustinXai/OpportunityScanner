@@ -72,6 +72,11 @@ export interface ReviewAnalysis {
   userRageLevel: number;
   bestSlogan: string;
   killerFeature: string;
+  // v5.5 新增
+  crashDensity: number;
+  developerUnresponsive: boolean;
+  technicalErrors: string[];
+  fixRecommendations: string[];
 }
 
 export interface ZombieTarget {

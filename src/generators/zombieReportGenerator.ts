@@ -393,7 +393,6 @@ export class ZombieReportGenerator {
 
     return lines.join('\n');
   }
-}
 
   // ============================================================
   // v5.5: PRD 文档生成

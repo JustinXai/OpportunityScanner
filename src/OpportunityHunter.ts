@@ -182,8 +182,6 @@ function markAsScanned(name: string, platform: string, result: 'gold' | 'skip' |
 // ============================================================
 // 日志文件
 // ============================================================
-const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
-
 function initFileLogger(): void {
   try {
     if (!fs.existsSync(LOG_DIR)) {
@@ -532,8 +530,7 @@ class Fetchers {
       { q: '"VSCode" "slow" OR "memory leak" extension reddit', category: 'VSCode性能' },
       // 放弃/过时抱怨
       { q: '"VSCode extension" "deprecated" OR "no longer supported"', category: 'VSCode放弃' },
-      { q: '"VSCode" extension "incompatible" OR "error" after update', category: 'VSCode不兼容' },
-    ];
+      { q: '"VSCode" extension "incompatible" OR "error" after update', category: 'VSCode不兼容' }
     ];
 
     const results: PainSignal[] = [];
@@ -612,8 +609,9 @@ class Fetchers {
 
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'fulfilled') {
-        signals.push(...results[i].value);
-        results[i].value.forEach(s => {
+        const values = (results[i] as PromiseFulfilledResult<PainSignal[]>).value;
+        signals.push(...values);
+        values.forEach((s: PainSignal) => {
           if (s.platform === 'Twitter') counts.Twitter++;
           else if (s.platform === 'Chrome-Store') counts.Chrome++;
           else if (s.platform === 'VSCode') counts.VSCode++;
