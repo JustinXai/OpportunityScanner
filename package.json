@@ -5,9 +5,10 @@
   "type": "module",
   "main": "src/OpportunityHunter.ts",
   "scripts": {
-    "start": "npx tsx OpportunityHunter.ts",
-    "scan": "npx tsx OpportunityHunter.ts",
-    "dev": "npx tsx OpportunityHunter.ts"
+    "start": "npx tsx src/OpportunityHunter.ts",
+    "scan": "npx tsx src/OpportunityHunter.ts",
+    "dev": "npx tsx src/OpportunityHunter.ts",
+    "zombie": "npx tsx src/OpportunityHunter.ts"
   },
   "keywords": [
     "opportunity",

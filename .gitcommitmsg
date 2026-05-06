@@ -1,11 +1,8 @@
-feat: add HN/GitHub/SO trending fetcher + solo-hacker scoring engine
+feat: 僵尸插件扫描器 + 新闻聚合 + Twitter工作流
 
-- New trendingFetcher: fetches pain signals from Hacker News (show/launch
-  posts), GitHub Trending (filtered for commercial projects), Stack Overflow
-  (zero-answer high-score questions)
-- New scoringEngine: rule-based solo-hacker penalty (fraud, compliance,
-  browser-agent, crypto, etc.) injected after dual-AI analysis
-- Extract shared types to src/types.ts for cross-module consistency
-- Add @types/nodemailer, fix unknown[] type casts in trendingFetcher
-- Expanded Reddit search queries with multi-platform coverage
-- Fix TARGET_ACQUIRED verdict type, Chrome MV3 queries refined
+- FreeChromeZombieFetcher: 无API的免费采集器，支持Serper/DuckDuckGo/ChromeStore/GitHub
+- ZombieHunterWorkflow: 完整的僵尸插件发现流程
+- NewsAggregatorWorkflow: 多源新闻聚合工作流
+- TwitterWorkflow: Twitter数据采集与分析
+- ChromeZombieFetcher: Chrome Web Store官方API采集
+- 修复服务器网络超时问题（降低并发、增加间隔）

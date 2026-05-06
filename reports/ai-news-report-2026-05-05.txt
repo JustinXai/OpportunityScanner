@@ -1,0 +1,93 @@
+======================================================================
+AI 热点新闻推文报告
+生成时间: 2026/5/5 18:27:17 (UTC+8)
+数据源: rss, hn, arxiv
+======================================================================
+
+【推文文案 - 每条含英文 + 中文双语】
+----------------------------------------------------------------------
+
+【推文 1】
+英文: Your IDE is secretly giving Copilot commit credit even when you wrote everything yourself 🤖 VS Code adding "Co-Authored-by Copilot" to your commits... without asking. Is your code really yours anymore? #VSCode #hackernews #tech
+中文: 😱 VS Code偷偷在你的每个commit里塞"Co-Authored-by Copilot"——不管你有没有用过它！微软这波操作是在帮Copilot刷KPI吗？🤣 你的代码贡献记录就这么被AI"蹭名"了，程序员们敢怒了。#VSCode #AI 你发现这个彩蛋了吗？
+配图: http://2.24.31.207:7000/v1/files/image/2e044cbd790dc6ddf6ec3408.png
+来源: VS Code inserting 'Co-Authored-by Copilot' into commits regardless of usage
+链接: https://github.com/microsoft/vscode/pull/310226
+
+【推文 2】
+英文: Broke airlines fear one thing: the internet going "actually, let's just BUY it" 🛫 Crowdfunding a Spirit Air takeover might be unhinged — but is it really? #hackernews #tech #StartupIdeas
+中文: 等等，AI新闻突然变成投资建议了？😂 有人用AI分析航空股，直接建议"买入Spirit航空"——这AI是在帮你理财还是在帮你亏钱？ #AI投资 #人工智能 你敢让AI帮你炒股吗？
+配图: http://2.24.31.207:7000/v1/files/image/968c2f553607b00cc5d10c0b.png
+来源: Let's Buy Spirit Air
+链接: https://letsbuyspiritair.com/
+
+【推文 3】
+英文: What if you gave Claude a DeepSeek brain? 🧠 DeepClaude merges both AI giants into one unstoppable coding agent loop — and it's going viral for a reason. Would you trust two AIs to write your code? #hackernews #tech #AI
+中文: 🤯 Claude Code遇上DeepSeek V4 Pro，两大神器强强联手！DeepClaude把最强推理引擎塞进Claude的代理循环，写代码这事儿直接起飞。这组合有多猛，程序员们还敢说AI替代不了你？🚀 #AI编程 #DeepSeek
+配图: http://2.24.31.207:7000/v1/files/image/26510a2a8d164d7b9bdb70d2.png
+来源: DeepClaude – Claude Code agent loop with DeepSeek V4 Pro
+链接: https://github.com/aattaran/deepclaude
+
+----------------------------------------------------------------------
+【英文新闻汇总 - 10 条】
+----------------------------------------------------------------------
+
+1. [Hacker News] 5/3/2026
+   VS Code inserting 'Co-Authored-by Copilot' into commits regardless of usage
+   **VS Code is automatically adding "Co-Authored-by: GitHub Copilot" attribution to git commits even when developers haven't used Copilot at all during their coding session.** This undisclosed behavior raises serious concerns about transparency and consent, as developers may unknowingly misrepresent their work's authorship in version control history. For AI practitioners and teams with strict IP or compliance policies, this highlights the growing need to scrutinize how AI tools embed themselves into workflows — often without explicit user awareness.
+   原始链接: https://github.com/microsoft/vscode/pull/310226
+   素材图片: https://opengraph.githubassets.com/c7cf918d48153091d4478f9674b9defb9da1a9b578b00d42809093e82f022a22/microsoft/vscode/pull/310226
+
+2. [Hacker News] 5/4/2026
+   Let's Buy Spirit Air
+   This Hacker News post titled "Let's Buy Spirit Air" doesn't appear to contain meaningful AI-related content — it seems to be about a proposal or discussion around acquiring Spirit Airlines, a bankrupt budget carrier. There is no substantive article body provided, making it impossible to extract AI-specific insights. Without more content, no relevant summary for AI practitioners can be written.
+   原始链接: https://letsbuyspiritair.com/
+
+3. [Hacker News] 5/4/2026
+   DeepClaude – Claude Code agent loop with DeepSeek V4 Pro
+   **DeepClaude** combines DeepSeek V4 Pro's reasoning capabilities with Claude Code's agentic execution loop, creating a hybrid system that leverages the strengths of both models. This architecture separates the "thinking" (DeepSeek's deep reasoning) from the "doing" (Claude's reliable code execution and tool use), potentially offering better performance than either model alone. For AI practitioners, this matters because it demonstrates a practical pattern for composing specialized models rather than relying on a single model for all tasks.
+   原始链接: https://github.com/aattaran/deepclaude
+   素材图片: https://opengraph.githubassets.com/cc7e77a1a5d7723dd7a9e98653d5530ed1108d869c95adebe99e792d25754467/aattaran/deepclaude
+
+4. [Hacker News] 5/3/2026
+   OpenAI’s o1 correctly diagnosed 67% of ER patients vs. 50-55% by triage doctors
+   OpenAI's o1 model correctly diagnosed 67% of emergency room patients, outperforming human triage doctors who achieved 50-55% accuracy — a gap of roughly 12-17 percentage points. This marks a meaningful benchmark for clinical AI, suggesting large reasoning models can already exceed baseline human performance on high-stakes diagnostic tasks. For AI practitioners, it signals that o1-style chain-of-thought reasoning may be particularly well-suited for structured decision-making under uncertainty, opening doors for deployment in resource-constrained medical settings.
+   原始链接: https://www.theguardian.com/technology/2026/apr/30/ai-outperforms-doctors-in-harvard-trial-of-emergency-triage-diagnoses
+   素材图片: https://i.guim.co.uk/img/media/7f4b1062db43fb053f4d68c08b8e92dd39f49107/0_62_4362_3487/master/4362.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctZGVmYXVsdC5wbmc&enable=upscale&s=ceb8f56ddb65e715896d86461e95819f
+
+5. [Hacker News] 5/3/2026
+   Kimi K2.6 just beat Claude, GPT-5.5, and Gemini in a coding challenge
+   Moonshot AI's Kimi K2.6 has outperformed Claude, GPT-5.5, and Gemini on a coding benchmark, marking a notable win for a Chinese AI lab in a highly competitive space. This matters for AI practitioners because it signals that the gap between frontier Western models and emerging challengers is narrowing rapidly. Developers evaluating models for code generation tasks should now include Kimi K2.6 in their comparisons rather than defaulting to the usual suspects.
+   原始链接: https://thinkpol.ca/2026/04/30/an-open-weights-chinese-model-just-beat-claude-gpt-5-5-and-gemini-in-a-programming-challenge/
+   素材图片: https://thinkpol.ca/wp-content/uploads/2026/04/tp_cover.png
+
+6. [Hacker News] 5/3/2026
+   Specsmaxxing – On overcoming AI psychosis, and why I write specs in YAML
+   **AI-assisted development works best when developers write detailed YAML specifications before prompting models, rather than iterating through vague back-and-forth exchanges.** The author argues that "AI psychosis" — the frustrating loop of contradictory AI outputs and lost context — can be overcome by treating specs as structured contracts that ground the model's behavior. For AI practitioners, this matters because it shifts the workflow from reactive prompting to deliberate upfront design, dramatically improving output consistency and reducing wasted iterations.
+   原始链接: https://acai.sh/blog/specsmaxxing
+   素材图片: https://acai.mintlify.app/mintlify-assets/_next/image?url=%2F_mintlify%2Fapi%2Fog%3Fdivision%3DDocumentation%26title%3DSpecsmaxxing%26description%3DOn%2Bovercoming%2BAI%2Bpsychosis%252C%2Band%2Bwhy%2BI%2Bwrite%2Bspecs%2Bin%2BYAML%2B%2528plus%2Bopen-sourcing%2Ba%2Btoolkit%2Bfor%2Byou%2Bto%2Btry%2529%26logoLight%3Dhttps%253A%252F%252Fmintcdn.com%252Facai%252F64tMg2VKm-ey5cuT%252Flogo-word.svg%253Ffit%253Dmax%2526auto%253Dformat%2526n%253D64tMg2VKm-ey5cuT%2526q%253D85%2526s%253D95b3095af445779b3cd61dc26931fa84%26logoDark%3Dhttps%253A%252F%252Fmintcdn.com%252Facai%252F64tMg2VKm-ey5cuT%252Flogo-word.svg%253Ffit%253Dmax%2526auto%253Dformat%2526n%253D64tMg2VKm-ey5cuT%2526q%253D85%2526s%253D95b3095af445779b3cd61dc26931fa84%26primaryColor%3D%2523930d7a%26lightColor%3D%2523f765f7%26darkColor%3D%25231a0416%26backgroundLight%3D%2523fcf8fb%26backgroundDark%3D%2523140411&amp;w=1200&amp;q=100
+
+7. [Hacker News] 5/2/2026
+   AI Self-preferencing in Algorithmic Hiring: Empirical Evidence and Insights
+   **AI systems show a measurable bias toward candidates who list AI-related skills and tools on their résumés**, according to new empirical research on algorithmic hiring. The study finds that AI-powered hiring tools effectively "self-preference" — ranking applicants higher when their profiles signal familiarity with AI, independent of actual job fit. For AI practitioners, this raises a critical fairness concern: the systems organizations deploy to reduce human bias may be quietly encoding a new one, skewing talent pipelines toward AI-adjacent backgrounds while filtering out otherwise qualified candidates.
+   原始链接: https://arxiv.org/abs/2509.00462
+   素材图片: https://static.arxiv.org/icons/twitter/arxiv-logo-twitter-square.png
+
+8. [Hacker News] 5/5/2026
+   Y Combinator's Stake in OpenAI (0.6%?)
+   Y Combinator reportedly holds approximately 0.6% equity in OpenAI, a stake dating back to OpenAI's origins as a YC-backed nonprofit. This valuation, if accurate at OpenAI's current ~$300B valuation, would make YC's position worth roughly $1.8 billion — a remarkable return on an early-stage bet. For AI practitioners, this highlights how foundational accelerator relationships continue to shape the ownership and governance structures of the most influential AI labs.
+   原始链接: https://daringfireball.net/2026/05/y_combinators_stake_in_openai
+   素材图片: https://daringfireball.net/graphics/df-wide-card.png
+
+9. [Hacker News] 5/4/2026
+   LLMs Are Not a Higher Level of Abstraction
+   **LLMs Are Not a Higher Level of Abstraction** argues that treating large language models as a new, higher-level programming abstraction is a conceptual mistake — they are fundamentally probabilistic text predictors, not reliable logic engines. The piece warns that developers who lean into this framing risk building brittle systems that fail in unpredictable ways when the model's statistical shortcuts don't align with actual reasoning. For AI practitioners, the takeaway is clear: LLMs are powerful *tools*, not trustworthy *abstractions*, and sound system design still requires explicit validation, constraints, and traditional engineering discipline.
+   原始链接: https://www.lelanthran.com/chap15/content.html
+
+10. [Hacker News] 5/3/2026
+   Ask HN: Is the Job Market Actually Bad?
+   A Hacker News discussion highlights a stark divide in the tech job market, where highly sought-after engineers with strong networks report finding new roles within days, even amid widespread layoff headlines. The thread suggests that AI and senior engineering talent with visible online presences continue to attract aggressive recruiter outreach, making their experience fundamentally different from those earlier in their careers or in less in-demand specializations. For AI practitioners, this underscores the growing importance of personal branding and recruiter visibility — skills and a public profile may matter as much as technical ability in navigating today's uneven market.
+   原始链接: https://news.ycombinator.com/item?id=47988268
+
+----------------------------------------------------------------------
+由 OpportunityScanner 自动生成

@@ -1,0 +1,80 @@
+🧟 Chrome 僵尸插件套利机会报告
+========================================
+时间: 2026/5/6 15:41:48
+目标: 7 个僵尸插件
+========================================
+
+【目标 1】headless-recorder
+评分: 70/100 | 安装量: 152,780 用户
+最后更新: 2022/12/16
+定价: subscription - $9-29/月 或 $79-199/年
+预估月收入: $1375-3667
+商店链接: https://github.com/checkly/headless-recorder
+
+截流话术:
+"headless-recorder" 原作者已停更，我们接手修复！
+搜索 "Ultimate headless-recorder" 获取最新版
+永久买断 $138 起
+
+---
+
+【目标 2】react-devtools
+评分: 70/100 | 安装量: 110,150 用户
+最后更新: 2019/9/3
+定价: subscription - $9-29/月 或 $79-199/年
+预估月收入: $991-2644
+商店链接: https://github.com/facebook/react-devtools
+
+截流话术:
+"react-devtools" 原作者已停更，我们接手修复！
+搜索 "Ultimate react-devtools" 获取最新版
+永久买断 $99 起
+
+---
+
+【目标 3】Screen Recorder for Google Chrome™
+评分: 65/100 | 安装量: 600,000 用户
+最后更新: 2023/11/8
+定价: freemium - 免费基础 + $19-49 高级版
+预估月收入: $9000-24000
+商店链接: https://chromewebstore.google.com/detail/screen-recorder-for-googl/eclbecdgdoahkliaijlpkigldlkojjdn
+
+截流话术:
+"Screen Recorder for Google Chrome™" 原作者已停更，我们接手修复！
+搜索 "Ultimate Screen Recorder for Google Chrome™" 获取最新版
+永久买断 $900 起
+
+---
+
+【目标 4】uBlock
+评分: 60/100 | 安装量: 82,420 用户
+最后更新: 2022/9/9
+定价: freemium - 免费基础 + $19-49 高级版
+预估月收入: $2473-6594
+商店链接: https://github.com/uBlock-LLC/uBlock
+
+截流话术:
+"uBlock" 原作者已停更，我们接手修复！
+搜索 "Ultimate uBlock" 获取最新版
+永久买断 $247 起
+
+---
+
+【目标 5】thegreatsuspender
+评分: 60/100 | 安装量: 50,820 用户
+最后更新: 2023/8/11
+定价: freemium - 免费基础 + $19-49 高级版
+预估月收入: $1525-4066
+商店链接: https://github.com/greatsuspender/thegreatsuspender
+
+截流话术:
+"thegreatsuspender" 原作者已停更，我们接手修复！
+搜索 "Ultimate thegreatsuspender" 获取最新版
+永久买断 $153 起
+
+---
+
+... 还有 2 个目标，详见完整报告
+
+========================================
+由 OpportunityScanner 自动生成
