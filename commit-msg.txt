@@ -1,13 +1,23 @@
-feat: v3.1 - 路径解耦 + DeepSeek V5.0 进攻版
+feat: v5.2 - 战场级重构
 
 修复:
-- 所有 /app/ 硬编码路径改为项目相对路径
-- NewsAggregatorWorkflow.ts 路径修复
-- TwitterWorkflow.ts 路径修复
+- 强制路径解耦: 自动创建 logs/reports/data 目录
+- NewsAggregatorWorkflow.ts 最后残留路径修复
 
-升级 DeepSeek V5.0:
-- 注入进攻性: CTO + CGO 双视角
+关键词怨气化:
+- 从"停更"转向"崩溃"关键词
+- Twitter: broken, stopped working, memory leak
+- Chrome: broken since update, buggy, manifest v3
+- VSCode: crash, freeze, incompatible
+
+信号去重增强:
+- 新增 isArticleContent() 过滤文章/数据报告
+- 自动跳过 "I Analyzed", "Data Report" 等内容
+
+超级金矿判定 (+30分起跳):
+- 10万+用户 + 48h内5条+负面评论 = 起跳80分
 - 自动化用户搬运潜力 +20分
-- 细化定价: 禁止虚词，必须给出具体价格
-- 维度跨越: 检测重复话题时强制分析不同工具
-- 迁移潜力: 新增 migrationPotential 字段
+- 分数上限提升至150分
+
+新增字段:
+- superGoldConditions: 超级金矿条件详情

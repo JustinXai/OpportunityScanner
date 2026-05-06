@@ -27,7 +27,6 @@ import type {
 } from './types.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as path from 'path';
 
 // ============================================================
 // 配置
@@ -533,7 +532,7 @@ export class NewsAggregatorWorkflow {
   }
 
   private saveReport(): void {
-    const outputDir = this.config.outputDir ?? '/app/reports';
+    const outputDir = this.config.outputDir ?? path.join(process.cwd(), 'reports');
     try {
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });

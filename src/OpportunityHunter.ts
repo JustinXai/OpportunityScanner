@@ -220,8 +220,15 @@ const USER_AGENTS = [
 // ============================================================
 // 类型定义
 // ============================================================
+interface SuperGoldConditions {
+  has100kUsers: boolean;
+  recentNegativeComments: number;
+  isSuperGold: boolean;
+  superGoldBonus: number;
+}
+
 interface ComprehensiveAnalysis {
-  score: number; // 0-120 (含迁移加成)
+  score: number; // 0-150 (含超级金矿+迁移加成)
   verdict: 'GOLD' | 'WORTHY' | 'SKIP' | 'LOW_QUALITY';
   reasons: string[];
   actionPlan: string;
@@ -232,6 +239,7 @@ interface ComprehensiveAnalysis {
   signalQuality: 'HIGH' | 'MEDIUM' | 'LOW'; // 信号纯度
   migrationPotential: boolean; // 自动化用户搬运潜力
   migrationBonus: number; // 加分项 0-20
+  superGoldConditions: SuperGoldConditions; // 超级金矿条件
 }
 
 interface GoldenOpportunity {
@@ -317,25 +325,45 @@ const NOISE_PATTERNS = [
   /^maybe (try|look)/i,
 ];
 
+// 文章/数据报告过滤模式
+const ARTICLE_PATTERNS = [
+  /I Analyzed \d+/i,
+  /data report/i,
+  /list of \d+/i,
+  /best of \d{4}/i,
+  /statistic/i,
+  /research study/i,
+  /survey result/i,
+  /case study/i,
+];
+
 function isLowQualityContent(text: string): boolean {
   const trimmed = text.trim();
-  
+
   // 太短
   if (trimmed.length < 20) return true;
-  
+
   // 包含噪音模式
   for (const pattern of NOISE_PATTERNS) {
     if (pattern.test(trimmed)) return true;
   }
-  
+
   // 太多问号（通常是提问而非抱怨）
   const questionCount = (trimmed.match(/\?/g) || []).length;
   if (questionCount > 2) return true;
-  
+
   // 没有具体产品/工具名
   const hasProductName = /extension|plugin|app|tool|software|service|platform/i.test(trimmed);
   if (!hasProductName) return true;
-  
+
+  return false;
+}
+
+function isArticleContent(title: string, snippet: string): boolean {
+  const text = title + ' ' + snippet;
+  for (const pattern of ARTICLE_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
   return false;
 }
 
@@ -353,14 +381,17 @@ class Fetchers {
     console.log('\n🐦 [Twitter] 采集 Twitter 抱怨信号...');
     const learning = loadLearningData();
     
+    // 怨气化关键词：从"停更"转向"崩溃"
     const queries = [
-      // 未更新僵尸软件
-      { q: '"not updated" extension OR plugin OR app 2025 OR 2026', category: '未更新抱怨' },
-      { q: '"last updated" chrome extension abandoned OR broken', category: '放弃插件' },
-      { q: '"developer abandoned" extension OR plugin broken', category: '开发者放弃' },
-      // 特定平台抱怨
-      { q: 'site:twitter.com OR site:x.com chrome extension broken OR stopped working', category: '推特抱怨' },
-      { q: '"VSCode extension" broken OR "no update" OR abandoned 2026', category: 'VSCode抱怨' },
+      // 崩溃抱怨（高信号纯度）
+      { q: '"broken" OR "stopped working" chrome extension reddit 2026', category: '崩溃抱怨' },
+      { q: '"not working since" update chrome extension', category: '更新后崩溃' },
+      { q: '"memory leak" OR "slow" chrome extension reddit', category: '性能问题' },
+      // 替代需求（商业价值高）
+      { q: '"need alternative" chrome extension "doesn\'t work"', category: '主动找替代' },
+      { q: '"ModHeader" OR "uBlock" alternative chrome 2026', category: '替代品搜索' },
+      // VSCode 抱怨
+      { q: '"VSCode" extension "broken" OR "crash" reddit 2026', category: 'VSCode崩溃' },
     ];
 
     const results: PainSignal[] = [];
@@ -374,6 +405,12 @@ class Fetchers {
         for (const item of items.slice(0, 5)) {
           const title = item.title || '';
           const snippet = item.snippet || '';
+          
+          // 过滤文章/数据报告（不浪费钱）
+          if (isArticleContent(title, snippet)) {
+            console.log(`      └─ [过滤] 文章/报告: ${title.substring(0, 30)}...`);
+            continue;
+          }
           
           // 过滤噪音
           if (isLowQualityContent(snippet)) {
@@ -413,16 +450,17 @@ class Fetchers {
   async fetchChromeStoreSignals(): Promise<PainSignal[]> {
     console.log('\n🟢 [ChromeStore] 采集 Chrome 商店差评...');
     
+    // 怨气化关键词：从"停更"转向"崩溃"
     const queries = [
-      // 1星差评
-      { q: 'site:chromewebstore.google.com "one star" "not working" 2026', category: '1星差评' },
-      { q: 'site:chromewebstore.google.com "one star" "broken" "manifest v3"', category: 'MV3崩溃' },
-      // 未更新插件
-      { q: 'site:chromewebstore.google.com "last updated" "not working" 2025 OR 2026', category: '未更新' },
-      { q: '"chrome extension" abandoned OR "no longer supported" 2026', category: '放弃支持' },
-      // 替换需求
-      { q: '"alternative to" chrome extension "manifest v3" 2026', category: 'MV3替代' },
-      { q: '"ModHeader" alternative OR replacement chrome', category: 'ModHeader替代' },
+      // 崩溃差评（高信号纯度）
+      { q: 'site:chromewebstore.google.com "broken since update" OR "stopped working" 2026', category: '更新崩溃' },
+      { q: 'site:chromewebstore.google.com "one star" "useless" OR "waste of money"', category: '1星差评' },
+      { q: '"chrome extension" "memory leak" OR "cpu high" reddit', category: '性能崩溃' },
+      // MV3 迁移失败（商业机会）
+      { q: '"chrome extension" "manifest v3" broken OR not working alternative', category: 'MV3失败' },
+      { q: '"ModHeader alternative" OR "uBlock replacement" chrome 2026', category: '替代需求' },
+      // Bug 抱怨
+      { q: '"chrome extension" "buggy" OR "glitch" OR "error" 2026', category: 'Bug抱怨' },
     ];
 
     const results: PainSignal[] = [];
@@ -436,6 +474,12 @@ class Fetchers {
         for (const item of items.slice(0, 5)) {
           const title = item.title || '';
           const snippet = item.snippet || '';
+          
+          // 过滤文章/数据报告（不浪费钱）
+          if (isArticleContent(title, snippet)) {
+            console.log(`      └─ [过滤] 文章/报告: ${title.substring(0, 30)}...`);
+            continue;
+          }
           
           // 提取评论数（需要至少10条）
           const commentCount = this.extractCommentCount(snippet);
@@ -481,13 +525,15 @@ class Fetchers {
   async fetchVSCodeSignals(): Promise<PainSignal[]> {
     console.log('\n📦 [VSCode] 采集 VSCode 僵尸扩展...');
     
+    // 怨气化关键词
     const queries = [
-      // VSCode 扩展抱怨
-      { q: 'site:marketplace.visualstudio.com "last updated" "not working"', category: 'VSCode未更新' },
-      { q: '"VSCode extension" broken OR "stopped working" 2025 OR 2026', category: 'VSCode崩溃' },
-      { q: '"VSCode" "no updates" OR "abandoned" OR "deprecated" extension', category: 'VSCode放弃' },
-      // 具体扩展问题
-      { q: 'site:reddit.com "VSCode" extension broken OR slow OR "not compatible"', category: 'VSCode Reddit' },
+      // 崩溃抱怨
+      { q: '"VSCode" extension "broken" OR "crash" OR "freeze" 2026', category: 'VSCode崩溃' },
+      { q: '"VSCode" "slow" OR "memory leak" extension reddit', category: 'VSCode性能' },
+      // 放弃/过时抱怨
+      { q: '"VSCode extension" "deprecated" OR "no longer supported"', category: 'VSCode放弃' },
+      { q: '"VSCode" extension "incompatible" OR "error" after update', category: 'VSCode不兼容' },
+    ];
     ];
 
     const results: PainSignal[] = [];
@@ -501,6 +547,12 @@ class Fetchers {
         for (const item of items.slice(0, 5)) {
           const title = item.title || '';
           const snippet = item.snippet || '';
+          
+          // 过滤文章/数据报告（不浪费钱）
+          if (isArticleContent(title, snippet)) {
+            console.log(`      └─ [过滤] 文章/报告: ${title.substring(0, 30)}...`);
+            continue;
+          }
           
           // 过滤噪音
           if (isLowQualityContent(snippet)) {
@@ -632,19 +684,27 @@ class DeepSeekAnalyzer {
    - Chrome MV3 / VSCode 扩展
    - 开发周期？
 
-5. **【关键】自动化用户搬运潜力** (加20分!)
+5. **【超级金矿判定】+30分起跳!**
+   如果同时满足以下条件，起跳分数 80 分：
+   - 插件有 10万+ 用户
+   - 48小时内出现 5条以上 "Broken"/"Useless"/"Waste" 评论
+   - 这是用户的主动抱怨，不是数据报告
+   
+   满足 → 直接输出 score 80-120
+
+6. **自动化用户搬运潜力** (额外+20分!)
    - 这个产品能否实现：自动检测用户电脑上已死的插件，一键迁移到更安全的替代品？
    - 能否成为插件分发入口？
    - 如果能实现自动化 → 直接 +20 分！
 
-6. **【关键】定价必须具体**
+7. **【关键】定价必须具体**
    - 禁止说"免费增值"这种虚词！
    - 必须给出：买断 $X 或 按量 $Y/100次
-   - 示例："$29 买断" 或 "$0.1/次 API调用"
+   - 示例："$29 买断" 或 "$0.1/100次 API调用"
 
 【输出格式】(严格JSON)
 {
-  "score": 0-120,
+  "score": 0-150,
   "verdict": "GOLD|WORTHY|SKIP|LOW_QUALITY",
   "reasons": ["原因1", "原因2"],
   "actionPlan": "具体行动方案（包含MVP步骤）",
@@ -654,14 +714,20 @@ class DeepSeekAnalyzer {
   "commentCount": 10,
   "signalQuality": "HIGH|MEDIUM|LOW",
   "migrationPotential": true或false,
-  "migrationBonus": 0-20
+  "migrationBonus": 0-20,
+  "superGoldConditions": {
+    "has100kUsers": true或false,
+    "recentNegativeComments": 数量,
+    "isSuperGold": true或false,
+    "superGoldBonus": 0-30
+  }
 }
 
 【判断标准】
-- GOLD (90-120分): 自动化用户搬运 + 信号纯度高 + 具体定价 + 技术可行
-- WORTHY (60-89分): 满足部分条件
+- GOLD (100-150分): 超级金矿 + 自动化用户搬运 + 信号纯度高 + 具体定价
+- WORTHY (60-99分): 满足部分条件
 - SKIP (30-59分): 竞争激烈或技术难度高
-- LOW_QUALITY (0-29分): 信号纯度低、论坛噪音`;
+- LOW_QUALITY (0-29分): 信号纯度低、论坛噪音、文章报道`;
 
     try {
       console.log('   [DeepSeek] 发送请求...');
@@ -707,7 +773,13 @@ class DeepSeekAnalyzer {
         commentCount: Number(data.commentCount) || 0,
         signalQuality: ['HIGH', 'MEDIUM', 'LOW'].includes(data.signalQuality) ? data.signalQuality : 'LOW',
         migrationPotential: Boolean(data.migrationPotential),
-        migrationBonus: Number(data.migrationBonus) || 0
+        migrationBonus: Number(data.migrationBonus) || 0,
+        superGoldConditions: {
+          has100kUsers: Boolean(data.superGoldConditions?.has100kUsers),
+          recentNegativeComments: Number(data.superGoldConditions?.recentNegativeComments) || 0,
+          isSuperGold: Boolean(data.superGoldConditions?.isSuperGold),
+          superGoldBonus: Number(data.superGoldConditions?.superGoldBonus) || 0
+        }
       };
     } catch {
       return this.getMock();
@@ -726,7 +798,13 @@ class DeepSeekAnalyzer {
       commentCount: 0,
       signalQuality: 'LOW',
       migrationPotential: false,
-      migrationBonus: 0
+      migrationBonus: 0,
+      superGoldConditions: {
+        has100kUsers: false,
+        recentNegativeComments: 0,
+        isSuperGold: false,
+        superGoldBonus: 0
+      }
     };
   }
 
@@ -788,11 +866,16 @@ class GitHubIssueCreator {
 
 ---
 
-### 📈 DeepSeek V5.0 综合评分
-- **总分**: ${opp.analysis.score}/120 (含迁移加成 ${opp.analysis.migrationBonus}分)
+### 📈 DeepSeek V5.2 综合评分
+- **总分**: ${opp.analysis.score}/150
 - **判决**: ${opp.analysis.verdict}
 - **优先级**: ${opp.analysis.priority}
 - **迁移潜力**: ${opp.analysis.migrationPotential ? '✅ 有' : '❌ 无'}
+- **超级金矿**: ${opp.analysis.superGoldConditions.isSuperGold ? '🎱 YES (+' + opp.analysis.superGoldConditions.superGoldBonus + '分)' : '❌ No'}
+
+**超级金矿条件:**
+- 100万+用户: ${opp.analysis.superGoldConditions.has100kUsers ? '✅' : '❌'}
+- 近48h负面评论: ${opp.analysis.superGoldConditions.recentNegativeComments}条
 
 **评估理由:**
 ${opp.analysis.reasons.map((r, i) => `${i + 1}. ${r}`).join('\n')}
@@ -1032,6 +1115,20 @@ async function main(): Promise<void> {
   console.log('\n========================================');
   console.log('🚀 Opportunity Hunter 启动中...');
   console.log('========================================\n');
+
+  // 自动创建必要的目录（宿主机适配）
+  const dirs = ['logs', 'reports', 'data'];
+  for (const dir of dirs) {
+    try {
+      const dirPath = path.join(process.cwd(), dir);
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+        console.log(`✅ 创建目录: ${dirPath}`);
+      }
+    } catch (err) {
+      console.warn(`⚠️ 无法创建目录 ${dir}:`, err instanceof Error ? err.message : err);
+    }
+  }
 
   try {
     const hunter = new OpportunityHunter();
