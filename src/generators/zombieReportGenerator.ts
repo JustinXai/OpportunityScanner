@@ -1,10 +1,12 @@
 // src/generators/zombieReportGenerator.ts
-// Chrome 僵尸插件套利报告生成器
+// Chrome 僵尸插件套利报告生成器 v5.5
+// 深度漏洞探测版 - 自动化 PRD 生成，包含技术修复建议
 //
 // 输出格式：
 // 1. Markdown 报告（人类可读）
 // 2. JSON 数据（程序处理）
 // 3. 邮件文本（发送通知）
+// 4. PRD 文档（技术修复建议）
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -23,6 +25,8 @@ export interface ZombieReportConfig {
   generateJson?: boolean;
   /** 是否生成邮件文本 */
   generateEmail?: boolean;
+  /** 是否生成 PRD 文档 (v5.5新增) */
+  generatePRD?: boolean;
   /** 最大显示数量 */
   maxDisplay?: number;
 }
@@ -40,6 +44,7 @@ export class ZombieReportGenerator {
       generateMarkdown: config.generateMarkdown ?? true,
       generateJson: config.generateJson ?? true,
       generateEmail: config.generateEmail ?? true,
+      generatePRD: config.generatePRD ?? true, // v5.5: 默认生成 PRD
       maxDisplay: config.maxDisplay ?? 10
     };
   }
@@ -60,6 +65,7 @@ export class ZombieReportGenerator {
       markdownPath: '',
       jsonPath: '',
       emailPath: '',
+      prdPath: '', // v5.5: PRD 路径
       summary: this.generateSummary(analyzedZombies),
       generatedAt: new Date()
     };
@@ -86,6 +92,14 @@ export class ZombieReportGenerator {
       results.emailPath = path.join(this.config.outputDir, `zombie-email-${timestamp}.txt`);
       fs.writeFileSync(results.emailPath, email, 'utf-8');
       console.log(`[ZombieReport] 邮件文本已保存: ${results.emailPath}`);
+    }
+
+    // v5.5: 生成 PRD 文档
+    if (this.config.generatePRD) {
+      const prd = this.generatePRD(analyzedZombies, timestamp);
+      results.prdPath = path.join(this.config.outputDir, `zombie-prd-${timestamp}.md`);
+      fs.writeFileSync(results.prdPath, prd, 'utf-8');
+      console.log(`[ZombieReport] PRD 文档已保存: ${results.prdPath}`);
     }
 
     return results;
@@ -122,7 +136,7 @@ export class ZombieReportGenerator {
 
       lines.push(`### ${i + 1}. ${signal.name}`);
       lines.push('');
-      lines.push(`**评分**: ${score.total}/100 | **需求热度**: ${score.breakdown.demandScore}/40 | **失效证明**: ${score.breakdown.complaintScore}/30 | **修复难度**: ${score.breakdown.difficultyScore}/20 | **窗口期**: ${score.breakdown.windowScore}/10`);
+      lines.push(`**评分**: ${score.total}/130 | **需求热度**: ${score.breakdown.demandScore}/40 | **失效证明**: ${score.breakdown.complaintScore}/30 | **修复难度**: ${score.breakdown.difficultyScore}/20 | **窗口期**: ${score.breakdown.windowScore}/10 | **崩溃密度**: ${score.breakdown.crashDensity}/30 | **开发者失联**: +${score.breakdown.developerUnresponsive || 0}`);
       lines.push('');
       lines.push('| 字段 | 值 |');
       lines.push('|------|-----|');
@@ -134,9 +148,9 @@ export class ZombieReportGenerator {
       lines.push(`| 商店链接 | [点击访问](${signal.storeUrl}) |`);
       lines.push('');
 
-      // v4.5: 评论深度分析
+      // v4.5/v5.5: 评论深度分析
       if (analysis) {
-        lines.push('## 🔥 用户怨念分析 (v4.5)');
+        lines.push('## 🔥 用户怨念分析 (v5.5)');
         lines.push('');
         lines.push('| 分析项 | 值 |');
         lines.push('|--------|-----|');
@@ -144,7 +158,14 @@ export class ZombieReportGenerator {
         lines.push(`| 平均评分 | ${analysis.avgRating}/5 |`);
         lines.push(`| 负面评论占比 | ${analysis.negativeRatio}% |`);
         lines.push(`| ⚠️ MV3 损坏 | ${analysis.mv3Broken ? '**是** - 明确的市场机会!' : '否'} |`);
+        lines.push(`| 💥 崩溃密度 | ${analysis.crashDensity}/30 |`);
+        lines.push(`| 👻 开发者失联 | ${analysis.developerUnresponsive ? '**是** - 用户求助无门!' : '否'} |`);
         lines.push('');
+
+        if (analysis.technicalErrors && analysis.technicalErrors.length > 0) {
+          lines.push(`**🔧 检测到的技术问题**: ${analysis.technicalErrors.map(e => `\`${e}\``).join(', ')}`);
+          lines.push('');
+        }
 
         if (analysis.painPoints.length > 0) {
           lines.push(`**😤 用户最强怨念**: ${analysis.painPoints.slice(0, 3).map(p => `\`${p}\``).join(', ')}`);
@@ -155,6 +176,15 @@ export class ZombieReportGenerator {
           lines.push('**✨ 用户最想要的功能**:');
           for (const feature of analysis.requestedFeatures.slice(0, 2)) {
             lines.push(`- "${feature}"`);
+          }
+          lines.push('');
+        }
+
+        // v5.5: 修复建议
+        if (analysis.fixRecommendations && analysis.fixRecommendations.length > 0) {
+          lines.push('**🔧 技术修复建议**:');
+          for (const rec of analysis.fixRecommendations.slice(0, 3)) {
+            lines.push(`- ${rec}`);
           }
           lines.push('');
         }
@@ -365,6 +395,191 @@ export class ZombieReportGenerator {
   }
 }
 
+  // ============================================================
+  // v5.5: PRD 文档生成
+  // ============================================================
+
+  private generatePRD(analyzedZombies: AnalyzedZombie[], timestamp: string): string {
+    const lines: string[] = [];
+
+    lines.push('# 🧟 OpportunityScanner v5.5 PRD - Chrome 僵尸插件套利');
+    lines.push('');
+    lines.push(`**版本**: v5.5 深度漏洞探测版`);
+    lines.push(`**生成时间**: ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} (UTC+8)`);
+    lines.push(`**目标数量**: ${analyzedZombies.length} 个`);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+
+    lines.push('# 一、项目概述');
+    lines.push('');
+    lines.push('## 1.1 项目背景');
+    lines.push('');
+    lines.push('Chrome Web Store 上存在大量停更的僵尸插件，这些插件：');
+    lines.push('- 有稳定用户群（安装量 5 万+）');
+    lines.push('- 作者已停止维护更新');
+    lines.push('- 存在各类技术问题（MV3 不兼容、崩溃等）');
+    lines.push('- 用户抱怨强烈但找不到替代品');
+    lines.push('');
+    lines.push('**机会**: 接手修复这些插件，提供付费版本，直接获取稳定用户流量。');
+    lines.push('');
+
+    lines.push('## 1.2 核心功能');
+    lines.push('');
+    lines.push('| 功能 | 描述 | 优先级 |');
+    lines.push('|------|------|--------|');
+    lines.push('| 深度评论抓取 | 直接抓取 Chrome Store 评论页，提取用户痛点 | P0 |');
+    lines.push('| 崩溃密度分析 | 计算"not working"等关键词比例，量化崩溃程度 | P0 |');
+    lines.push('| 技术报错识别 | 识别 CSS 选择器变更、API 权限被收回等技术问题 | P1 |');
+    lines.push('| 自动化 PRD 生成 | 为每个目标生成完整的技术修复建议文档 | P1 |');
+    lines.push('| 开发者失联检测 | 检测用户是否提到开发者不响应 | P1 |');
+    lines.push('');
+
+    lines.push('# 二、评分模型 v5.5');
+    lines.push('');
+    lines.push('## 2.1 评分维度（满分 130 分）');
+    lines.push('');
+    lines.push('| 维度 | 权重 | 说明 |');
+    lines.push('|------|------|------|');
+    lines.push('| 需求热度 | 0-40 分 | 安装量越大分越高 |');
+    lines.push('| 失效证明 | 0-30 分 | 负面评论占比越高分越高 |');
+    lines.push('| 修复难度 | 0-20 分 | 权限少 + GitHub 有仓库 = 难度低 |');
+    lines.push('| 窗口期 | 0-10 分 | 停更越久窗口越大 |');
+    lines.push('| **崩溃密度** | **0-30 分** | **核心新增！** 评论中"not working"比例 |');
+    lines.push('| **开发者无响应** | **+10 分** | **核心新增！** 用户提到开发者失联 |');
+    lines.push('');
+
+    lines.push('## 2.2 崩溃密度评分逻辑');
+    lines.push('');
+    lines.push('```');
+    lines.push('崩溃密度评分规则:');
+    lines.push('- 如果最近 10 条评论中有 5 条以上包含 "not working"');
+    lines.push('- 直接给 30 分满分');
+    lines.push('- 崩溃密度 = (崩溃评论数 / 10) * 30');
+    lines.push('```');
+    lines.push('');
+
+    lines.push('## 2.3 开发者无响应奖励');
+    lines.push('');
+    lines.push('```');
+    lines.push('开发者失联检测关键词:');
+    lines.push('- "developer not responding"');
+    lines.push('- "no response"');
+    lines.push('- "abandoned" / "discontinued"');
+    lines.push('- "no support" / "unresponsive"');
+    lines.push('');
+    lines.push('命中任一关键词 -> 额外奖励 +10 分');
+    lines.push('```');
+    lines.push('');
+
+    lines.push('# 三、技术修复建议');
+    lines.push('');
+
+    // 为每个目标生成详细修复建议
+    for (let i = 0; i < Math.min(analyzedZombies.length, 5); i++) {
+      const { signal, score } = analyzedZombies[i];
+      const analysis = signal.reviewAnalysis;
+
+      lines.push(`## 3.${i + 1} ${signal.name}`);
+      lines.push('');
+      lines.push(`**评分**: ${score.total}/130`);
+      lines.push(`**安装量**: ${signal.installCount.toLocaleString()} 用户`);
+      lines.push(`**最后更新**: ${signal.lastUpdated.toLocaleDateString()}`);
+      lines.push('');
+
+      lines.push('### 3.' + (i + 1) + '.1 问题诊断');
+      lines.push('');
+
+      if (analysis) {
+        lines.push('| 问题类型 | 状态 | 说明 |');
+        lines.push('|----------|------|------|');
+        lines.push(`| MV3 不兼容 | ${analysis.mv3Broken ? '⚠️ 是' : '✅ 否'} | ${analysis.mv3Broken ? '需要完整 MV3 迁移' : '暂无 MV3 问题'} |`);
+        lines.push(`| 崩溃密度 | 💥 ${analysis.crashDensity}/30 | ${analysis.crashDensity >= 20 ? '极高，需要紧急修复' : analysis.crashDensity >= 10 ? '较高' : '一般'} |`);
+        lines.push(`| 开发者失联 | 👻 ${analysis.developerUnresponsive ? '是' : '否'} | ${analysis.developerUnresponsive ? '用户正在寻找替代方案' : '开发者可能有响应'} |`);
+        lines.push('');
+
+        if (analysis.technicalErrors && analysis.technicalErrors.length > 0) {
+          lines.push('**检测到的技术问题**:');
+          for (const err of analysis.technicalErrors) {
+            lines.push(`- \`${err}\``);
+          }
+          lines.push('');
+        }
+
+        lines.push('### 3.' + (i + 1) + '.2 重制版核心逻辑建议');
+        lines.push('');
+        lines.push('> 如果该项目达标，请分析评论区的具体技术报错。它是 CSS 选择器变了？还是 API 权限被收回了？');
+        lines.push('');
+
+        if (analysis.fixRecommendations && analysis.fixRecommendations.length > 0) {
+          lines.push('**技术修复建议**:');
+          lines.push('');
+          for (let j = 0; j < analysis.fixRecommendations.length; j++) {
+            lines.push(`${j + 1}. ${analysis.fixRecommendations[j]}`);
+          }
+          lines.push('');
+        } else {
+          lines.push('1. 克隆原插件核心逻辑');
+          lines.push('2. 修复已知 Bug');
+          lines.push('3. 实现 MV3 兼容');
+          lines.push('4. 优化性能');
+          lines.push('');
+        }
+
+        lines.push('### 3.' + (i + 1) + '.3 定价策略');
+        lines.push('');
+        lines.push(`| 项目 | 值 |`);
+        lines.push('|------|-----|');
+        lines.push(`| 推荐模式 | **${score.pricingSuggestion.recommended.toUpperCase()}** |`);
+        lines.push(`| 价格区间 | ${score.pricingSuggestion.priceRange} |`);
+        lines.push(`| 月收入预估 | $${score.pricingSuggestion.estimatedRevenue.conservative}-${score.pricingSuggestion.estimatedRevenue.optimistic} |`);
+        lines.push(`| 转化率假设 | ${(score.pricingSuggestion.conversionAssumptions.conversionRate * 100).toFixed(1)}% |`);
+        lines.push('');
+      }
+
+      lines.push('---');
+      lines.push('');
+    }
+
+    lines.push('# 四、营销策略');
+    lines.push('');
+    lines.push('## 4.1 截流话术模板');
+    lines.push('');
+    lines.push('```');
+    lines.push('🔧 "[插件名]" 原作者已停更，我们接手修复并持续更新！');
+    lines.push('搜索 "Ultimate [插件名]" 或 "[插件名] Fixed" 获取最新版');
+    lines.push('永久买断 $X 起，比订阅更划算！');
+    lines.push('```');
+    lines.push('');
+
+    lines.push('## 4.2 搜索词优化');
+    lines.push('');
+    lines.push('针对每个目标插件，在 Google/YouTube 投放以下关键词:');
+    lines.push('');
+    lines.push('- `"[插件名] not working"`');
+    lines.push('- `"[插件名] alternative"`');
+    lines.push('- `"[插件名] broken"`');
+    lines.push('- `"[插件名] for Chrome 2026"`');
+    lines.push('');
+
+    lines.push('# 五、风险与注意事项');
+    lines.push('');
+    lines.push('| 风险类型 | 等级 | 应对策略 |');
+    lines.push('|----------|------|----------|');
+    lines.push('| Chrome 政策风险 | 中 | 确保符合 MV3 规范，避免使用被废弃 API |');
+    lines.push('| 原作者维权 | 低 | 不直接克隆，差异化开发 |');
+    lines.push('| 技术复杂度 | 中 | 优先选择权限简单、逻辑清晰的插件 |');
+    lines.push('| 市场竞争 | 低-中 | 利用原插件的差评作为素材，突出对比优势 |');
+    lines.push('');
+
+    lines.push('---');
+    lines.push('');
+    lines.push('*由 OpportunityScanner v5.5 自动生成*');
+
+    return lines.join('\n');
+  }
+}
+
 // ============================================================
 // 类型定义
 // ============================================================
@@ -373,6 +588,7 @@ export interface ZombieReportResult {
   markdownPath: string;
   jsonPath: string;
   emailPath: string;
+  prdPath: string; // v5.5: PRD 文档路径
   summary: ZombieReportSummary;
   generatedAt: Date;
 }
@@ -409,6 +625,8 @@ export interface ZombieTargetJson {
     complaintScore: number;
     difficultyScore: number;
     windowScore: number;
+    crashDensity: number; // v5.5
+    developerUnresponsive: number; // v5.5
   };
   verdict: string;
   verdictReason: string;
@@ -430,6 +648,15 @@ export interface ZombieTargetJson {
     rating: number;
     sentiment: string;
   }[];
+  // v5.5: 评论分析详情
+  reviewAnalysis?: {
+    crashDensity: number;
+    developerUnresponsive: boolean;
+    technicalErrors: string[];
+    fixRecommendations: string[];
+    mv3Broken: boolean;
+    userRageLevel: number;
+  };
 }
 
 // ============================================================

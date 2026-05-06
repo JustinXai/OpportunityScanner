@@ -87,7 +87,7 @@ export class ZombieHunterWorkflow {
       maxTargets: config.maxTargets || 10,
       sendEmail: config.sendEmail ?? true,
       emailTo: config.emailTo || process.env.EMAIL_TO || '',
-      outputDir: config.outputDir || process.env.REPORT_DIR || './reports',
+      outputDir: config.outputDir || path.join(process.cwd(), 'reports'),
       useMockData: config.useMockData ?? false
     };
 
