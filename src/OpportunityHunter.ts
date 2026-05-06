@@ -221,15 +221,17 @@ const USER_AGENTS = [
 // 类型定义
 // ============================================================
 interface ComprehensiveAnalysis {
-  score: number; // 0-100
+  score: number; // 0-120 (含迁移加成)
   verdict: 'GOLD' | 'WORTHY' | 'SKIP' | 'LOW_QUALITY';
   reasons: string[];
   actionPlan: string;
-  pricing: string;
+  pricing: string; // 必须具体，如 "$29 买断" 或 "$0.1/100次"
   seoKeywords: string[];
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   commentCount: number; // 评论区真实评论数
   signalQuality: 'HIGH' | 'MEDIUM' | 'LOW'; // 信号纯度
+  migrationPotential: boolean; // 自动化用户搬运潜力
+  migrationBonus: number; // 加分项 0-20
 }
 
 interface GoldenOpportunity {
@@ -574,14 +576,37 @@ class Fetchers {
 }
 
 // ============================================================
-// DeepSeek 综合分析器（单一模型）
+// DeepSeek 综合分析器（单一模型 - V5.0 进攻版）
 // ============================================================
 class DeepSeekAnalyzer {
+  // 用于检测重复内容
+  private lastTopics: string[] = [];
+  private lastTopicCount = 0;
+
   async analyze(signal: PainSignal): Promise<ComprehensiveAnalysis> {
     console.log(`   [DeepSeek] 分析: ${signal.title.substring(0, 40)}...`);
     const startTime = Date.now();
 
-    const prompt = `你是一位顶级商业分析师，专注于独立开发者的软件产品机会评估。
+    // 检测是否是重复话题
+    const currentTopic = signal.title.toLowerCase().substring(0, 50);
+    const isRepetitive = this.lastTopics.slice(-3).some(t => 
+      this.calculateSimilarity(t, currentTopic) > 0.7
+    );
+    
+    if (isRepetitive && this.lastTopicCount >= 2) {
+      console.log(`   [DeepSeek] 检测到重复话题，强制维度跨越...`);
+    }
+    
+    this.lastTopics.push(currentTopic);
+    if (this.lastTopics.length > 10) this.lastTopics.shift();
+    if (isRepetitive) this.lastTopicCount++;
+    else this.lastTopicCount = 0;
+
+    const dimensionHint = isRepetitive && this.lastTopicCount >= 2 
+      ? '\n【维度跨越指令】前3个信号都是同一话题，请强制分析不同的具体工具/插件，不要复读同一篇文章。'
+      : '';
+
+    const prompt = `你同时兼任 CTO（首席技术官）和 CGO（首席增长官），必须同时考虑技术可行性和商业暴利潜力。${dimensionHint}
 
 【商机信号】
 平台: ${signal.platform}
@@ -589,57 +614,54 @@ class DeepSeekAnalyzer {
 描述: ${signal.description}
 链接: ${signal.url}
 
-【任务】综合评估以下维度，给出单一判决：
+【任务】激进评估，挖掘暴利机会：
 
-1. **信号纯度评估** (HIGH/MEDIUM/LOW)
-   - 评论/抱怨是否具体指出问题？
-   - 是否有明确的用户数量（至少10条评论才值得）
-   - 还是几句模糊的论坛抱怨？
+1. **信号纯度** (HIGH/MEDIUM/LOW)
+   - 具体抱怨 vs 模糊抱怨？
+   - 至少10条真实评论才值得
 
 2. **市场规模** (1-100)
-   - 用户搜索意图有多强？
-   - 每月搜索量估计？
+   - 月搜索量？
+   - 用户痛点强度？
 
 3. **竞争强度** (1-100)
-   - 现有解决方案是否满足需求？
-   - 是否有明显的市场空白？
+   - 现有方案是否满足？
+   - 空白市场？
 
 4. **技术可行性** (1-100)
-   - MV3 Chrome 扩展可行性？
-   - VSCode 扩展可行性？
-   - 开发难度估计？
+   - Chrome MV3 / VSCode 扩展
+   - 开发周期？
 
-5. **商业潜力** (1-100)
-   - 定价空间？
-   - 目标用户付费意愿？
+5. **【关键】自动化用户搬运潜力** (加20分!)
+   - 这个产品能否实现：自动检测用户电脑上已死的插件，一键迁移到更安全的替代品？
+   - 能否成为插件分发入口？
+   - 如果能实现自动化 → 直接 +20 分！
 
-6. **行动优先级** (HIGH/MEDIUM/LOW)
-   - 综合以上评估
-
-7. **定价建议**
-   - 买断制/订阅制/免费增值？
-
-8. **行动方案**
-   - 具体要做什么？
+6. **【关键】定价必须具体**
+   - 禁止说"免费增值"这种虚词！
+   - 必须给出：买断 $X 或 按量 $Y/100次
+   - 示例："$29 买断" 或 "$0.1/次 API调用"
 
 【输出格式】(严格JSON)
 {
-  "score": 0-100,
+  "score": 0-120,
   "verdict": "GOLD|WORTHY|SKIP|LOW_QUALITY",
   "reasons": ["原因1", "原因2"],
-  "actionPlan": "具体行动方案",
-  "pricing": "定价建议",
+  "actionPlan": "具体行动方案（包含MVP步骤）",
+  "pricing": "具体价格，如 '$29 买断制' 或 '$0.1/100次API'",
   "seoKeywords": ["关键词1", "关键词2"],
   "priority": "HIGH|MEDIUM|LOW",
   "commentCount": 10,
-  "signalQuality": "HIGH|MEDIUM|LOW"
+  "signalQuality": "HIGH|MEDIUM|LOW",
+  "migrationPotential": true或false,
+  "migrationBonus": 0-20
 }
 
-判断标准：
-- GOLD: 信号纯度高(至少10条具体评论) + 市场大 + 技术可行 + 商业潜力高
-- WORTHY: 满足部分条件，值得跟进
-- SKIP: 竞争激烈或技术难度高
-- LOW_QUALITY: 信号纯度低(模糊抱怨、论坛噪音、评论<10条)`;
+【判断标准】
+- GOLD (90-120分): 自动化用户搬运 + 信号纯度高 + 具体定价 + 技术可行
+- WORTHY (60-89分): 满足部分条件
+- SKIP (30-59分): 竞争激烈或技术难度高
+- LOW_QUALITY (0-29分): 信号纯度低、论坛噪音`;
 
     try {
       console.log('   [DeepSeek] 发送请求...');
@@ -683,7 +705,9 @@ class DeepSeekAnalyzer {
         seoKeywords: Array.isArray(data.seoKeywords) ? data.seoKeywords : [],
         priority: ['HIGH', 'MEDIUM', 'LOW'].includes(data.priority) ? data.priority : 'LOW',
         commentCount: Number(data.commentCount) || 0,
-        signalQuality: ['HIGH', 'MEDIUM', 'LOW'].includes(data.signalQuality) ? data.signalQuality : 'LOW'
+        signalQuality: ['HIGH', 'MEDIUM', 'LOW'].includes(data.signalQuality) ? data.signalQuality : 'LOW',
+        migrationPotential: Boolean(data.migrationPotential),
+        migrationBonus: Number(data.migrationBonus) || 0
       };
     } catch {
       return this.getMock();
@@ -700,8 +724,19 @@ class DeepSeekAnalyzer {
       seoKeywords: [],
       priority: 'LOW',
       commentCount: 0,
-      signalQuality: 'LOW'
+      signalQuality: 'LOW',
+      migrationPotential: false,
+      migrationBonus: 0
     };
+  }
+
+  // 简单相似度计算
+  private calculateSimilarity(a: string, b: string): number {
+    const wordsA = new Set(a.toLowerCase().split(/\s+/));
+    const wordsB = new Set(b.toLowerCase().split(/\s+/));
+    const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+    const union = new Set([...wordsA, ...wordsB]).size;
+    return union === 0 ? 0 : intersection / union;
   }
 }
 
@@ -753,10 +788,11 @@ class GitHubIssueCreator {
 
 ---
 
-### 📈 DeepSeek 综合评分
-- **总分**: ${opp.analysis.score}/100
+### 📈 DeepSeek V5.0 综合评分
+- **总分**: ${opp.analysis.score}/120 (含迁移加成 ${opp.analysis.migrationBonus}分)
 - **判决**: ${opp.analysis.verdict}
 - **优先级**: ${opp.analysis.priority}
+- **迁移潜力**: ${opp.analysis.migrationPotential ? '✅ 有' : '❌ 无'}
 
 **评估理由:**
 ${opp.analysis.reasons.map((r, i) => `${i + 1}. ${r}`).join('\n')}

@@ -1,0 +1,13 @@
+feat: v3.1 - 路径解耦 + DeepSeek V5.0 进攻版
+
+修复:
+- 所有 /app/ 硬编码路径改为项目相对路径
+- NewsAggregatorWorkflow.ts 路径修复
+- TwitterWorkflow.ts 路径修复
+
+升级 DeepSeek V5.0:
+- 注入进攻性: CTO + CGO 双视角
+- 自动化用户搬运潜力 +20分
+- 细化定价: 禁止虚词，必须给出具体价格
+- 维度跨越: 检测重复话题时强制分析不同工具
+- 迁移潜力: 新增 migrationPotential 字段

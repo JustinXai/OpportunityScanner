@@ -27,6 +27,7 @@ import type {
 } from './types.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as path from 'path';
 
 // ============================================================
 // 配置
@@ -103,6 +104,8 @@ export interface AggregatorConfig {
   outputDir?: string;
 }
 
+const PROJECT_ROOT = path.join(process.cwd());
+
 const DEFAULT_CONFIG: AggregatorConfig = {
   phases: {
     fetchRSS: true,
@@ -130,8 +133,8 @@ const DEFAULT_CONFIG: AggregatorConfig = {
   generator: { apiKey: '', apiBase: 'https://api1.link-ai.cc', maxConcurrency: 3, maxTweetLength: 250, generateImage: true },
   email: { host: '', port: 587, secure: false, user: '', pass: '', from: '', to: [] },
   logger: console.log,
-  logDir: '/app/logs',
-  outputDir: '/app/reports'
+  logDir: path.join(PROJECT_ROOT, 'logs'),
+  outputDir: path.join(PROJECT_ROOT, 'reports')
 };
 
 // ============================================================
@@ -619,8 +622,8 @@ export function createAggregatorConfigFromEnv(): AggregatorConfig {
     TWITTER_KEYWORDS = 'AI tools launch,GPT-5,Claude 4,AI startup funding',
     MAX_CONCURRENCY = '3',
     MAX_TWEET_LENGTH = '250',
-    LOG_DIR = '/app/logs',
-    OUTPUT_DIR = '/app/reports'
+    LOG_DIR = path.join(process.cwd(), 'logs'),
+    OUTPUT_DIR = path.join(process.cwd(), 'reports')
   } = process.env as Record<string, string>;
 
   const twitterKeywords = TWITTER_KEYWORDS.split(',').map(k => k.trim()).filter(Boolean);

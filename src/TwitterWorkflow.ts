@@ -27,6 +27,7 @@ import type {
 } from './types.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as path from 'path';
 
 // ============================================================
 // 配置
@@ -86,6 +87,8 @@ export interface TwitterWorkflowConfig {
   outputDir?: string;
 }
 
+const PROJECT_ROOT = path.join(process.cwd());
+
 const DEFAULT_CONFIG: Required<TwitterWorkflowConfig> = {
   phases: {
     fetch: true,
@@ -137,8 +140,8 @@ const DEFAULT_CONFIG: Required<TwitterWorkflowConfig> = {
     to: []
   },
   logger: console.log,
-  logDir: '/app/logs',
-  outputDir: '/app/reports'
+  logDir: path.join(PROJECT_ROOT, 'logs'),
+  outputDir: path.join(PROJECT_ROOT, 'reports')
 };
 
 // ============================================================
@@ -641,8 +644,8 @@ export function createTwitterWorkflowFromEnv(): TwitterWorkflowConfig {
     EMAIL_TO,
     MAX_CONCURRENCY = '3',
     MAX_TWEET_LENGTH = '250',
-    LOG_DIR = '/app/logs',
-    OUTPUT_DIR = '/app/reports'
+    LOG_DIR = path.join(process.cwd(), 'logs'),
+    OUTPUT_DIR = path.join(process.cwd(), 'reports')
   } = process.env as Record<string, string>;
 
   const keywords = TWITTER_KEYWORDS.split(',').map(k => k.trim()).filter(Boolean);
