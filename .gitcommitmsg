@@ -1,0 +1,11 @@
+feat: add HN/GitHub/SO trending fetcher + solo-hacker scoring engine
+
+- New trendingFetcher: fetches pain signals from Hacker News (show/launch
+  posts), GitHub Trending (filtered for commercial projects), Stack Overflow
+  (zero-answer high-score questions)
+- New scoringEngine: rule-based solo-hacker penalty (fraud, compliance,
+  browser-agent, crypto, etc.) injected after dual-AI analysis
+- Extract shared types to src/types.ts for cross-module consistency
+- Add @types/nodemailer, fix unknown[] type casts in trendingFetcher
+- Expanded Reddit search queries with multi-platform coverage
+- Fix TARGET_ACQUIRED verdict type, Chrome MV3 queries refined

@@ -2,8 +2,18 @@ name: Opportunity Scanner Pro
 
 on:
   schedule:
+    # 每天北京时间 8:00 和 20:00 运行
     - cron: '0 0,12 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: '扫描模式'
+        required: true
+        default: 'business-radar'
+        type: choice
+        options:
+          - business-radar
+          - classic
 
 jobs:
   scan:
@@ -22,15 +32,20 @@ jobs:
           node-version: '22'
 
       - name: Install Runtime
-        # 显式安装 tsx 确保运行环境绝对存在
         run: |
           npm install
           npm install -g tsx
 
       - name: Run Intelligence Scan
-        # 2>&1 | tee output.log 强制将所有错误信息合并并打印到 stdout
         run: |
-          stdbuf -oL -eL npx tsx OpportunityHunter.ts 2>&1 | tee runner.log
+          # 根据模式选择运行命令
+          if [ "${{ inputs.mode || 'business-radar' }}" = "business-radar" ]; then
+            echo "🚀 启动商业雷达扫描 v3.0..."
+            stdbuf -oL -eL npx tsx src/OpportunityHunter.ts --business-radar 2>&1 | tee runner.log
+          else
+            echo "🔧 启动经典模式扫描..."
+            stdbuf -oL -eL npx tsx src/OpportunityHunter.ts 2>&1 | tee runner.log
+          fi
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}

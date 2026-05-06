@@ -1,0 +1,361 @@
+// src/services/TwitterEmailService.ts
+// Twitter 内容邮件发送服务 - 使用 nodemailer SMTP
+// 邮件内容包含: 英文文案、葡语文案、生成的图片 URL
+
+import nodemailer, { Transporter } from 'nodemailer';
+import type { TwitterContent } from '../types.js';
+
+// ============================================================
+// 配置
+// ============================================================
+
+export interface TwitterEmailConfig {
+  /** SMTP 主机 */
+  host: string;
+  /** SMTP 端口 */
+  port: number;
+  /** 是否使用 TLS */
+  secure: boolean;
+  /** SMTP 用户名 */
+  user: string;
+  /** SMTP 密码 / 授权码 */
+  pass: string;
+  /** 发件人 */
+  from: string;
+  /** 收件人列表 */
+  to: string[];
+  /** 邮件主题前缀 */
+  subjectPrefix?: string;
+}
+
+export interface EmailSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+// ============================================================
+// HTML 邮件模板
+// ============================================================
+
+function buildHtmlEmail(contents: TwitterContent[]): string {
+  const rows = contents
+    .map((c, i) => {
+      const signal = c.sourceSignal;
+      const enText = c.texts.en ?? '(未生成英文文案)';
+      const ptText = c.texts.pt ?? '(未生成葡语文案)';
+      const imageSection = c.imageUrl
+        ? `<img src="${c.imageUrl}" alt="Generated Image" style="max-width:100%;border-radius:8px;margin-top:8px;" />`
+        : '<p style="color:#888;font-size:12px;">(未生成配图)</p>';
+      const hashtags = signal.hashtags.slice(0, 5).map(t => `#${t}`).join(' ');
+      const date = signal.postedAt.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      return `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;margin-bottom:12px;">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-weight:700;padding:4px 12px;border-radius:20px;font-size:12px;">
+          #${i + 1}
+        </div>
+        <span style="margin-left:10px;color:#64748b;font-size:13px;">
+          @${signal.author.username} · ${date} · ${signal.viralityLevel.toUpperCase()}
+        </span>
+        ${hashtags ? `<span style="margin-left:auto;color:#94a3b8;font-size:12px;">${hashtags}</span>` : ''}
+      </div>
+
+      <p style="color:#334155;font-size:14px;margin:0 0 16px;line-height:1.6;">
+        ${signal.content.substring(0, 200)}${signal.content.length > 200 ? '...' : ''}
+      </p>
+
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="color:#92400e;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:6px;">
+          🇬🇧 English
+        </div>
+        <div style="color:#1e293b;font-size:15px;line-height:1.5;">
+          ${enText}
+        </div>
+        <div style="color:#6b7280;font-size:11px;margin-top:4px;">
+          ${enText.length} chars
+        </div>
+      </div>
+
+      <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="color:#1e40af;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:6px;">
+          🇧🇷 Português
+        </div>
+        <div style="color:#1e293b;font-size:15px;line-height:1.5;">
+          ${ptText}
+        </div>
+        <div style="color:#6b7280;font-size:11px;margin-top:4px;">
+          ${ptText.length} chars
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        ${imageSection}
+      </div>
+
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0;">
+        <a href="${signal.url}" style="color:#667eea;font-size:12px;text-decoration:none;">
+          🔗 View Original Tweet
+        </a>
+        <span style="margin-left:16px;color:#94a3b8;font-size:12px;">
+          ❤️ ${signal.engagement.likes.toLocaleString()} &nbsp;
+          🔁 ${signal.engagement.retweets.toLocaleString()} &nbsp;
+          💬 ${signal.engagement.replies.toLocaleString()}
+        </span>
+      </div>
+    </div>`;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Twitter AI Content Report</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:640px;margin:0 auto;padding:20px;">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:16px;padding:32px;text-align:center;margin-bottom:24px;">
+      <div style="font-size:28px;margin-bottom:8px;">🐦</div>
+      <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 8px;">
+        Twitter AI Content Report
+      </h1>
+      <p style="color:#94a3b8;font-size:14px;margin:0;">
+        Generated by OpportunityScanner · ${new Date().toLocaleString()}
+      </p>
+    </div>
+
+    <!-- Stats Summary -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+      <div style="background:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="font-size:24px;font-weight:700;color:#667eea;">${contents.length}</div>
+        <div style="color:#64748b;font-size:12px;">Tweets</div>
+      </div>
+      <div style="background:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="font-size:24px;font-weight:700;color:#10b981;">${contents.filter(c => c.imageUrl).length}</div>
+        <div style="color:#64748b;font-size:12px;">Images</div>
+      </div>
+      <div style="background:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="font-size:24px;font-weight:700;color:#f59e0b;">
+          ${contents.reduce((sum, c) => sum + (c.texts.en?.length ?? 0), 0) || '—'}
+        </div>
+        <div style="color:#64748b;font-size:12px;">Avg Chars</div>
+      </div>
+    </div>
+
+    <!-- Content Rows -->
+    ${rows}
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:24px;color:#94a3b8;font-size:12px;">
+      <p>OpportunityScanner · Twitter Automation System</p>
+      <p>Powered by Link-AI API</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function buildTextEmail(contents: TwitterContent[]): string {
+  const lines: string[] = [
+    '🐦 TWITTER AI CONTENT REPORT',
+    '================================',
+    `Generated: ${new Date().toLocaleString()}`,
+    `Total: ${contents.length} tweets`,
+    '',
+    ''
+  ];
+
+  contents.forEach((c, i) => {
+    const signal = c.sourceSignal;
+    lines.push(`--- TWEET #${i + 1} ---`);
+    lines.push(`@${signal.author.username} · ${signal.postedAt.toLocaleString()}`);
+    lines.push('');
+    lines.push('ORIGINAL:');
+    lines.push(signal.content.substring(0, 200));
+    lines.push('');
+    lines.push('🇬🇧 ENGLISH:');
+    lines.push(c.texts.en ?? '(not generated)');
+    lines.push('');
+    lines.push('🇧🇷 PORTUGUESE:');
+    lines.push(c.texts.pt ?? '(not generated)');
+    lines.push('');
+    if (c.imageUrl) {
+      lines.push(`🖼️  IMAGE: ${c.imageUrl}`);
+    }
+    lines.push(`🔗 LINK: ${signal.url}`);
+    lines.push(`📊 ${signal.engagement.likes} ❤️ · ${signal.engagement.retweets} 🔁 · ${signal.engagement.replies} 💬`);
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+// ============================================================
+// 邮件服务
+// ============================================================
+
+export class TwitterEmailService {
+  private transporter: Transporter;
+  private config: TwitterEmailConfig;
+  private logger: (msg: string) => void;
+
+  constructor(
+    config: TwitterEmailConfig,
+    logger: (msg: string) => void = console.log
+  ) {
+    this.config = config;
+    this.logger = logger;
+
+    this.transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: {
+        user: config.user,
+        pass: config.pass
+      },
+      pool: true, // 连接池
+      maxConnections: 5,
+      rateLimit: 5, // 每秒最多5封
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000
+    });
+
+    this.logger('[TwitterEmail] SMTP transporter initialized');
+  }
+
+  /**
+   * 发送 Twitter 内容报告邮件
+   */
+  async sendReport(contents: TwitterContent[]): Promise<EmailSendResult> {
+    if (contents.length === 0) {
+      this.logger('[TwitterEmail] 无内容，跳过发送');
+      return { success: true, messageId: undefined };
+    }
+
+    const subject = `${this.config.subjectPrefix ?? '🐦'} Twitter AI Report (${contents.length} tweets) · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const htmlBody = buildHtmlEmail(contents);
+    const textBody = buildTextEmail(contents);
+
+    try {
+      const info = await this.transporter.sendMail({
+        from: this.config.from,
+        to: this.config.to.join(', '),
+        subject,
+        text: textBody,
+        html: htmlBody,
+        attachments: contents
+          .filter(c => c.imageUrl && c.imageUrl.startsWith('data:'))
+          .map(c => ({
+            filename: `generated-image-${Date.now()}.png`,
+            content: c.imageUrl!.split(',')[1],
+            encoding: 'base64',
+            contentType: 'image/png'
+          }))
+      });
+
+      this.logger(`[TwitterEmail] 发送成功: ${info.messageId}`);
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      this.logger(`[TwitterEmail] 发送失败: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 发送单条推文内容邮件 (实时通知)
+   */
+  async sendSingleTweet(content: TwitterContent): Promise<EmailSendResult> {
+    return this.sendReport([content]);
+  }
+
+  /**
+   * 发送摘要邮件 (仅包含文案，不含图片)
+   */
+  async sendSummary(
+    texts: Array<{ lang: 'en' | 'pt'; text: string; source: string; url: string }>
+  ): Promise<EmailSendResult> {
+    const htmlBody = texts
+      .map(
+        t => `
+      <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px;">
+          ${t.lang === 'en' ? '🇬🇧 English' : '🇧🇷 Português'} · <a href="${t.url}" style="color:#667eea;">Source</a>
+        </div>
+        <div style="font-size:15px;line-height:1.6;color:#1e293b;">${t.text}</div>
+      </div>`
+      )
+      .join('');
+
+    const fullHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:sans-serif;">
+  <div style="max-width:640px;margin:0 auto;">
+    <h2 style="color:#1e293b;">🐦 Twitter Content Summary</h2>
+    ${htmlBody}
+  </div>
+</body>
+</html>`;
+
+    try {
+      const info = await this.transporter.sendMail({
+        from: this.config.from,
+        to: this.config.to.join(', '),
+        subject: `🐦 Twitter Summary (${texts.length} tweets) · ${new Date().toLocaleDateString()}`,
+        text: texts.map(t => `[${t.lang.toUpperCase()}] ${t.text}\n${t.url}`).join('\n\n'),
+        html: fullHtml
+      });
+
+      this.logger(`[TwitterEmail] 摘要发送成功: ${info.messageId}`);
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      this.logger(`[TwitterEmail] 摘要发送失败: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * 验证 SMTP 连接
+   */
+  async verifyConnection(): Promise<boolean> {
+    try {
+      await this.transporter.verify();
+      this.logger('[TwitterEmail] SMTP 连接验证成功');
+      return true;
+    } catch (err: any) {
+      this.logger(`[TwitterEmail] SMTP 连接验证失败: ${err.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 关闭连接
+   */
+  async close(): Promise<void> {
+    this.transporter.close();
+    this.logger('[TwitterEmail] SMTP 连接已关闭');
+  }
+}
+
+// ============================================================
+// 便捷函数
+// ============================================================
+
+export function createTwitterEmailService(
+  config: TwitterEmailConfig,
+  logger?: (msg: string) => void
+): TwitterEmailService {
+  return new TwitterEmailService(config, logger);
+}
