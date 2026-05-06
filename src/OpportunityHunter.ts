@@ -22,7 +22,6 @@ console.log('🔍 [DEBUG] 运行环境上下文:');
 console.log('========================================');
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || '(未设置)'}`);
 console.log(`   CWD: ${process.cwd()}`);
-console.log(`   __dirname: ${__dirname}`);
 console.log(`   .env loaded: ${fs.existsSync('.env') ? 'YES' : 'NO'}`);
 console.log(`   SERPER_API_KEY: ${process.env.SERPER_API_KEY ? 'SET' : 'NOT SET'}`);
 console.log(`   DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? 'SET' : 'NOT SET'}`);
@@ -89,8 +88,9 @@ const GITHUB_REPO = 'JustinXai/OpportunityScanner';
 // ============================================================
 // 自我进化配置
 // ============================================================
-const SCANNED_CACHE_FILE = '/app/logs/scanned_cache.json';
-const LEARNING_FILE = '/app/logs/learning_data.json';
+const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
+const SCANNED_CACHE_FILE = path.join(LOG_DIR, 'scanned_cache.json');
+const LEARNING_FILE = path.join(LOG_DIR, 'learning_data.json');
 
 interface ScannedItem {
   name: string;
@@ -182,7 +182,7 @@ function markAsScanned(name: string, platform: string, result: 'gold' | 'skip' |
 // ============================================================
 // 日志文件
 // ============================================================
-const LOG_DIR = process.env.LOG_DIR || '/app/logs';
+const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
 function initFileLogger(): void {
   try {
