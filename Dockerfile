@@ -23,5 +23,6 @@ ENV NODE_ENV=production
 # 创建日志目录
 RUN mkdir -p /app/logs
 
-# 运行入口文件
-CMD ["npx", "tsx", "src/OpportunityHunter.ts"]
+# 运行入口文件（支持定时执行）
+# 通过环境变量 SCAN_INTERVAL 控制执行间隔（秒）
+CMD ["sh", "-c", "while true; do npx tsx src/OpportunityHunter.ts; echo '========================================='; echo '⏰ 扫描完成，等待${SCAN_INTERVAL:-172800}秒后再次执行...'; echo '========================================='; sleep ${SCAN_INTERVAL:-172800}; done"]

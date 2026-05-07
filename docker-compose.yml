@@ -27,6 +27,8 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_TO=${SMTP_TO:-}
+      # 定时执行间隔（秒），默认48小时=172800秒
+      - SCAN_INTERVAL=${SCAN_INTERVAL:-172800}
     
     # 日志持久化挂载
     volumes:
@@ -39,9 +41,13 @@ services:
         max-size: "10m"
         max-file: "5"
     
-    # 调度执行（可选，取消注释即可启用定时任务）
-    # command: >
-    #   sh -c "while true; do 
-    #     npx tsx src/OpportunityHunter.ts; 
-    #     sleep 86400; 
-    #   done"
+    # 定时调度执行（两天一次）
+    command: >
+      sh -c "while true; do 
+        npx tsx src/OpportunityHunter.ts; 
+        echo '=========================================';
+        echo '⏰ 扫描完成，等待48小时后再次执行...';
+        echo '下次执行时间: $$(date -d '+48 hours' '+%Y-%m-%d %H:%M:%S')';
+        echo '=========================================';
+        sleep 172800; 
+      done"
