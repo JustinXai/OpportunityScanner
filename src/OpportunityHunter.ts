@@ -101,10 +101,20 @@ interface ScannedItem {
 }
 
 interface LearningData {
-  successfulKeywords: string[];
-  failedKeywords: string[];
-  ignoredPatterns: string[];
+  successfulKeywords: string[];    // 成功发现金矿的关键词
+  failedKeywords: string[];        // 没有发现机会的关键词
+  ignoredPatterns: string[];       // 被过滤的噪音模式
   lastUpdated: string;
+  // v5.6: 搜索词进化相关
+  evolvedSearchQueries: string[];   // AI进化出的新搜索词
+  queryPerformance: Record<string, { hits: number; goldFound: number; lastUsed: string }>;
+  platformKeywordPool: {
+    twitter: string[];
+    chromeStore: string[];
+    vscode: string[];
+  };
+  evolutionVersion: number;        // 进化代数
+  lastEvolutionDate: string;      // 上次进化时间
 }
 
 function loadScannedCache(): ScannedItem[] {
@@ -129,14 +139,31 @@ function saveScannedCache(items: ScannedItem[]): void {
 function loadLearningData(): LearningData {
   try {
     if (fs.existsSync(LEARNING_FILE)) {
-      return JSON.parse(fs.readFileSync(LEARNING_FILE, 'utf-8'));
+      const data = JSON.parse(fs.readFileSync(LEARNING_FILE, 'utf-8'));
+      // 确保新字段存在（向后兼容）
+      return {
+        successfulKeywords: data.successfulKeywords || [],
+        failedKeywords: data.failedKeywords || [],
+        ignoredPatterns: data.ignoredPatterns || [],
+        lastUpdated: data.lastUpdated || new Date().toISOString(),
+        evolvedSearchQueries: data.evolvedSearchQueries || [],
+        queryPerformance: data.queryPerformance || {},
+        platformKeywordPool: data.platformKeywordPool || { twitter: [], chromeStore: [], vscode: [] },
+        evolutionVersion: data.evolutionVersion || 1,
+        lastEvolutionDate: data.lastEvolutionDate || ''
+      };
     }
   } catch {}
   return {
     successfulKeywords: [],
     failedKeywords: [],
     ignoredPatterns: [],
-    lastUpdated: new Date().toISOString()
+    lastUpdated: new Date().toISOString(),
+    evolvedSearchQueries: [],
+    queryPerformance: {},
+    platformKeywordPool: { twitter: [], chromeStore: [], vscode: [] },
+    evolutionVersion: 1,
+    lastEvolutionDate: ''
   };
 }
 
@@ -256,6 +283,355 @@ interface ScanResult {
 }
 
 // ============================================================
+// 搜索词进化引擎 v5.6
+// ============================================================
+class SearchEvolutionEngine {
+  private learning: LearningData;
+
+  constructor() {
+    this.learning = loadLearningData();
+  }
+
+  /**
+   * 获取进化后的搜索词（融合默认词 + 历史成功词 + 新探索词）
+   */
+  getEvolvedQueries(): {
+    twitter: Array<{ q: string; category: string }>;
+    chromeStore: Array<{ q: string; category: string }>;
+    vscode: Array<{ q: string; category: string }>;
+  } {
+    console.log('\n🧬 [进化引擎] 正在生成进化搜索词...');
+
+    const twitterQueries = this.evolveTwitterQueries();
+    const chromeStoreQueries = this.evolveChromeStoreQueries();
+    const vscodeQueries = this.evolveVscodeQueries();
+
+    console.log(`   Twitter: ${twitterQueries.length} 个搜索词`);
+    console.log(`   ChromeStore: ${chromeStoreQueries.length} 个搜索词`);
+    console.log(`   VSCode: ${vscodeQueries.length} 个搜索词`);
+    console.log(`   进化代数: v${this.learning.evolutionVersion}`);
+    console.log(`   历史成功词: ${this.learning.successfulKeywords.length} 个`);
+
+    return {
+      twitter: twitterQueries,
+      chromeStore: chromeStoreQueries,
+      vscode: vscodeQueries
+    };
+  }
+
+  /**
+   * 进化 Twitter 搜索词
+   */
+  private evolveTwitterQueries(): Array<{ q: string; category: string }> {
+    const queries: Array<{ q: string; category: string }> = [];
+
+    // 基础崩溃抱怨词（高权重）
+    queries.push(
+      { q: '"broken" OR "stopped working" chrome extension reddit 2026', category: '崩溃抱怨' },
+      { q: '"not working since" update chrome extension', category: '更新后崩溃' },
+      { q: '"memory leak" OR "slow" chrome extension reddit', category: '性能问题' },
+      { q: '"no longer working" chrome OR firefox extension', category: '彻底失效' },
+      { q: '"chrome extension" "crash" OR "freeze" 2026', category: '崩溃冻结' },
+    );
+
+    // 替代需求词（高商业价值）
+    queries.push(
+      { q: '"need alternative" chrome extension "doesn\'t work"', category: '主动找替代' },
+      { q: '"ModHeader alternative" OR "uBlock replacement" chrome', category: '替代品搜索' },
+      { q: '"best" chrome extension "replacement" 2026', category: '最佳替代' },
+      { q: '"abandoned" chrome extension "looking for" alternative', category: '放弃插件' },
+    );
+
+    // MV3 迁移失败词（2026年重点）
+    queries.push(
+      { q: '"manifest v3" broken OR not working alternative 2026', category: 'MV3失败' },
+      { q: '"mv3" extension "broken" OR "stopped" chrome 2026', category: 'MV3崩溃' },
+      { q: '"chrome update" "extension not working" 2026', category: '更新后崩溃' },
+    );
+
+    // 从历史成功关键词生成新搜索词
+    if (this.learning.successfulKeywords.length > 0) {
+      const recentSuccess = this.learning.successfulKeywords.slice(-10);
+      for (const keyword of recentSuccess) {
+        if (keyword.length > 3 && keyword.length < 30) {
+          queries.push({
+            q: `"${keyword}" extension "not working" OR "broken"`,
+            category: '历史成功词扩展'
+          });
+        }
+      }
+    }
+
+    // 从进化词池添加
+    const evolvedPool = this.learning.platformKeywordPool.twitter;
+    for (const query of evolvedPool.slice(0, 5)) {
+      if (!queries.some(q => q.q === query)) {
+        queries.push({ q: query, category: '进化词' });
+      }
+    }
+
+    // 探索性搜索（扩大覆盖）
+    queries.push(
+      { q: '"extension" "broken" site:reddit.com -"[megathread]"', category: '探索-崩溃' },
+      { q: '"addon" "stopped working" firefox OR chrome 2026', category: '探索-Firefox' },
+    );
+
+    return this.deduplicateQueries(queries);
+  }
+
+  /**
+   * 进化 Chrome Store 搜索词
+   */
+  private evolveChromeStoreQueries(): Array<{ q: string; category: string }> {
+    const queries: Array<{ q: string; category: string }> = [];
+
+    // 基础差评词
+    queries.push(
+      { q: 'site:chromewebstore.google.com "broken since update" OR "stopped working" 2026', category: '更新崩溃' },
+      { q: 'site:chromewebstore.google.com "one star" "useless" OR "waste"', category: '1星差评' },
+      { q: '"chrome extension" "memory leak" OR "cpu high" reddit', category: '性能崩溃' },
+      { q: 'site:chromewebstore.google.com "not working" "broken" reviews', category: '商店差评' },
+    );
+
+    // MV3 相关（2026年热点）
+    queries.push(
+      { q: '"chrome extension" "manifest v3" broken OR not working alternative', category: 'MV3失败' },
+      { q: '"mv3" "broken" OR "doesn\'t work" chrome web store', category: 'MV3崩溃' },
+    );
+
+    // 替代需求
+    queries.push(
+      { q: '"ModHeader alternative" OR "uBlock replacement" chrome 2026', category: '替代需求' },
+      { q: '"[插件名] alternative" chrome extension 2026', category: '通用替代' },
+    );
+
+    // Bug抱怨
+    queries.push(
+      { q: '"chrome extension" "buggy" OR "glitch" OR "error" 2026', category: 'Bug抱怨' },
+      { q: '"chrome" "extension" "doesn\'t work anymore" 2026', category: '彻底失效' },
+    );
+
+    // 从历史成功关键词生成
+    if (this.learning.successfulKeywords.length > 0) {
+      const recentSuccess = this.learning.successfulKeywords.slice(-10);
+      for (const keyword of recentSuccess) {
+        if (keyword.length > 3 && keyword.length < 30) {
+          queries.push({
+            q: `site:chromewebstore.google.com "${keyword}" OR "${keyword} extension" reviews`,
+            category: '历史成功词扩展'
+          });
+        }
+      }
+    }
+
+    // 从进化词池添加
+    const evolvedPool = this.learning.platformKeywordPool.chromeStore;
+    for (const query of evolvedPool.slice(0, 5)) {
+      if (!queries.some(q => q.q === query)) {
+        queries.push({ q: query, category: '进化词' });
+      }
+    }
+
+    // 探索性搜索
+    queries.push(
+      { q: 'site:reddit.com "chrome extension" "recommend" "broken" 2026', category: '探索-Reddit' },
+    );
+
+    return this.deduplicateQueries(queries);
+  }
+
+  /**
+   * 进化 VSCode 搜索词
+   */
+  private evolveVscodeQueries(): Array<{ q: string; category: string }> {
+    const queries: Array<{ q: string; category: string }> = [];
+
+    // 崩溃抱怨
+    queries.push(
+      { q: '"VSCode" extension "broken" OR "crash" OR "freeze" 2026', category: 'VSCode崩溃' },
+      { q: '"VSCode" "slow" OR "memory leak" extension reddit', category: 'VSCode性能' },
+      { q: '"VSCode extension" "deprecated" OR "no longer supported"', category: 'VSCode放弃' },
+      { q: '"VSCode" extension "incompatible" OR "error" after update', category: 'VSCode不兼容' },
+    );
+
+    // 替代需求
+    queries.push(
+      { q: '"VSCode" extension "alternative" OR "replacement" 2026', category: 'VSCode替代' },
+      { q: '"VSCode" "best" extension "broken" OR "not working"', category: 'VSCode最佳替代' },
+    );
+
+    // 从进化词池添加
+    const evolvedPool = this.learning.platformKeywordPool.vscode;
+    for (const query of evolvedPool.slice(0, 3)) {
+      if (!queries.some(q => q.q === query)) {
+        queries.push({ q: query, category: '进化词' });
+      }
+    }
+
+    return this.deduplicateQueries(queries);
+  }
+
+  /**
+   * 去重搜索词
+   */
+  private deduplicateQueries(queries: Array<{ q: string; category: string }>): Array<{ q: string; category: string }> {
+    const seen = new Set<string>();
+    return queries.filter(q => {
+      if (seen.has(q.q)) return false;
+      seen.add(q.q);
+      return true;
+    });
+  }
+
+  /**
+   * 记录搜索结果（用于学习）
+   */
+  recordSearchResult(query: string, category: string, signalsFound: number, goldFound: number): void {
+    const learning = loadLearningData();
+
+    // 更新查询性能
+    if (!learning.queryPerformance[query]) {
+      learning.queryPerformance[query] = { hits: 0, goldFound: 0, lastUsed: '' };
+    }
+    learning.queryPerformance[query].hits += signalsFound;
+    learning.queryPerformance[query].goldFound += goldFound;
+    learning.queryPerformance[query].lastUsed = new Date().toISOString();
+
+    // 如果发现金矿，记录关键词
+    if (goldFound > 0) {
+      const keywords = this.extractKeywords(query);
+      for (const keyword of keywords) {
+        if (!learning.successfulKeywords.includes(keyword)) {
+          learning.successfulKeywords.push(keyword);
+        }
+      }
+    }
+
+    // 如果没有找到任何信号，标记为失败词
+    if (signalsFound === 0) {
+      const keywords = this.extractKeywords(query);
+      for (const keyword of keywords) {
+        if (!learning.failedKeywords.includes(keyword)) {
+          learning.failedKeywords.push(keyword);
+        }
+      }
+    }
+
+    saveLearningData(learning);
+    this.learning = learning;
+  }
+
+  /**
+   * 从搜索词提取关键词
+   */
+  private extractKeywords(query: string): string[] {
+    // 移除搜索操作符和引号
+    const cleaned = query
+      .replace(/site:|OR|AND/gi, ' ')
+      .replace(/["']/g, '')
+      .trim();
+
+    // 提取有意义的词
+    const words = cleaned.split(/\s+/)
+      .filter(w => w.length > 3 && w.length < 30)
+      .filter(w => !['chrome', 'extension', 'plugin', 'reddit', '2026', 'not', 'working', 'broken'].includes(w.toLowerCase()));
+
+    return [...new Set(words)];
+  }
+
+  /**
+   * 触发 AI 进化（调用 DeepSeek 生成新搜索词）
+   */
+  async triggerEvolution(scanResults: { signalsFound: number; goldFound: number; topTools: string[] }): Promise<void> {
+    console.log('\n🧬 [进化引擎] 触发 AI 搜索词进化...');
+
+    if (scanResults.signalsFound < 20) {
+      console.log('   信号太少，跳过进化（需要至少20个信号才能有效学习）');
+      return;
+    }
+
+    const prompt = `你是一个 Chrome 扩展市场分析师，正在帮助优化商机扫描的搜索词。
+
+当前扫描结果：
+- 发现信号数: ${scanResults.signalsFound}
+- 发现金矿数: ${scanResults.goldFound}
+- 发现的热门工具: ${scanResults.topTools.slice(0, 5).join(', ') || '无'}
+
+历史成功关键词: ${this.learning.successfulKeywords.slice(-20).join(', ') || '无'}
+历史失败关键词: ${this.learning.failedKeywords.slice(-10).join(', ') || '无'}
+
+请生成 10-15 个新的搜索词，用于发现更多僵尸 Chrome 扩展/VSCode 插件商机。
+
+要求：
+1. 包含抱怨类搜索词（如 "broken", "not working", "stopped"）
+2. 包含替代需求类搜索词（如 "alternative", "replacement"）
+3. 包含 MV3 相关搜索词
+4. 基于历史成功词扩展新的变体
+5. 避免历史失败词中出现的模式
+
+输出格式（严格 JSON）：
+{
+  "twitterQueries": ["搜索词1", "搜索词2", ...],
+  "chromeStoreQueries": ["搜索词1", "搜索词2", ...],
+  "vscodeQueries": ["搜索词1", "搜索词2", ...]
+}`;
+
+    try {
+      const client = axios.create({
+        baseURL: 'https://api.deepseek.com/v1',
+        timeout: 60000,
+        headers: {
+          'Authorization': `Bearer ${ENV.DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await client.post('/chat/completions', {
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const content = response.data.choices[0].message.content;
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        const data = JSON.parse(match[0]);
+
+        const learning = loadLearningData();
+        learning.evolutionVersion = (learning.evolutionVersion || 1) + 1;
+        learning.lastEvolutionDate = new Date().toISOString();
+
+        // 合并新搜索词
+        if (data.twitterQueries) {
+          learning.platformKeywordPool.twitter = [
+            ...new Set([...(learning.platformKeywordPool.twitter || []), ...data.twitterQueries])
+          ].slice(-50);
+        }
+        if (data.chromeStoreQueries) {
+          learning.platformKeywordPool.chromeStore = [
+            ...new Set([...(learning.platformKeywordPool.chromeStore || []), ...data.chromeStoreQueries])
+          ].slice(-50);
+        }
+        if (data.vscodeQueries) {
+          learning.platformKeywordPool.vscode = [
+            ...new Set([...(learning.platformKeywordPool.vscode || []), ...data.vscodeQueries])
+          ].slice(-50);
+        }
+
+        saveLearningData(learning);
+        console.log(`   ✅ AI 进化完成！新进化代数: v${learning.evolutionVersion}`);
+        console.log(`   新增 Twitter 词: ${data.twitterQueries?.length || 0} 个`);
+        console.log(`   新增 ChromeStore 词: ${data.chromeStoreQueries?.length || 0} 个`);
+        console.log(`   新增 VSCode 词: ${data.vscodeQueries?.length || 0} 个`);
+      }
+    } catch (error) {
+      console.error(`   ❌ AI 进化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }
+}
+
+// ============================================================
 // HTTP 客户端
 // ============================================================
 class HttpFactory {
@@ -371,26 +747,23 @@ function isArticleContent(title: string, snippet: string): boolean {
 class Fetchers {
   private http = new HttpFactory();
   private serperClient = this.http.createSerperClient();
+  private evolutionEngine = new SearchEvolutionEngine();
+  private queryStats: Map<string, { signals: number; gold: number }> = new Map();
+
+  constructor() {
+    console.log('[Fetchers] 搜索词进化引擎已初始化');
+    console.log(`   当前进化代数: v${this.evolutionEngine.getEvolvedQueries().twitter.length}`);
+  }
 
   /**
    * 采集 Twitter 上的抱怨
    */
   async fetchTwitterSignals(): Promise<PainSignal[]> {
     console.log('\n🐦 [Twitter] 采集 Twitter 抱怨信号...');
-    const learning = loadLearningData();
-    
-    // 怨气化关键词：从"停更"转向"崩溃"
-    const queries = [
-      // 崩溃抱怨（高信号纯度）
-      { q: '"broken" OR "stopped working" chrome extension reddit 2026', category: '崩溃抱怨' },
-      { q: '"not working since" update chrome extension', category: '更新后崩溃' },
-      { q: '"memory leak" OR "slow" chrome extension reddit', category: '性能问题' },
-      // 替代需求（商业价值高）
-      { q: '"need alternative" chrome extension "doesn\'t work"', category: '主动找替代' },
-      { q: '"ModHeader" OR "uBlock" alternative chrome 2026', category: '替代品搜索' },
-      // VSCode 抱怨
-      { q: '"VSCode" extension "broken" OR "crash" reddit 2026', category: 'VSCode崩溃' },
-    ];
+
+    // 使用进化搜索词
+    const evolved = this.evolutionEngine.getEvolvedQueries();
+    const queries = evolved.twitter;
 
     const results: PainSignal[] = [];
 
@@ -399,6 +772,8 @@ class Fetchers {
       try {
         const response = await this.serperClient.post('', { q, num: 10 });
         const items = response.data?.organic || [];
+
+        let signalsFound = 0;
         
         for (const item of items.slice(0, 5)) {
           const title = item.title || '';
@@ -438,6 +813,9 @@ class Fetchers {
       }
     }
 
+    // 记录查询统计用于学习
+    this.queryStats.set('twitter', { signals: results.length, gold: 0 });
+
     console.log(`✅ Twitter: 获得 ${results.length} 个信号`);
     return results;
   }
@@ -447,19 +825,10 @@ class Fetchers {
    */
   async fetchChromeStoreSignals(): Promise<PainSignal[]> {
     console.log('\n🟢 [ChromeStore] 采集 Chrome 商店差评...');
-    
-    // 怨气化关键词：从"停更"转向"崩溃"
-    const queries = [
-      // 崩溃差评（高信号纯度）
-      { q: 'site:chromewebstore.google.com "broken since update" OR "stopped working" 2026', category: '更新崩溃' },
-      { q: 'site:chromewebstore.google.com "one star" "useless" OR "waste of money"', category: '1星差评' },
-      { q: '"chrome extension" "memory leak" OR "cpu high" reddit', category: '性能崩溃' },
-      // MV3 迁移失败（商业机会）
-      { q: '"chrome extension" "manifest v3" broken OR not working alternative', category: 'MV3失败' },
-      { q: '"ModHeader alternative" OR "uBlock replacement" chrome 2026', category: '替代需求' },
-      // Bug 抱怨
-      { q: '"chrome extension" "buggy" OR "glitch" OR "error" 2026', category: 'Bug抱怨' },
-    ];
+
+    // 使用进化搜索词
+    const evolved = this.evolutionEngine.getEvolvedQueries();
+    const queries = evolved.chromeStore;
 
     const results: PainSignal[] = [];
 
@@ -513,6 +882,9 @@ class Fetchers {
       }
     }
 
+    // 记录查询统计
+    this.queryStats.set('chromeStore', { signals: results.length, gold: 0 });
+
     console.log(`✅ ChromeStore: 获得 ${results.length} 个信号`);
     return results;
   }
@@ -522,16 +894,10 @@ class Fetchers {
    */
   async fetchVSCodeSignals(): Promise<PainSignal[]> {
     console.log('\n📦 [VSCode] 采集 VSCode 僵尸扩展...');
-    
-    // 怨气化关键词
-    const queries = [
-      // 崩溃抱怨
-      { q: '"VSCode" extension "broken" OR "crash" OR "freeze" 2026', category: 'VSCode崩溃' },
-      { q: '"VSCode" "slow" OR "memory leak" extension reddit', category: 'VSCode性能' },
-      // 放弃/过时抱怨
-      { q: '"VSCode extension" "deprecated" OR "no longer supported"', category: 'VSCode放弃' },
-      { q: '"VSCode" extension "incompatible" OR "error" after update', category: 'VSCode不兼容' }
-    ];
+
+    // 使用进化搜索词
+    const evolved = this.evolutionEngine.getEvolvedQueries();
+    const queries = evolved.vscode;
 
     const results: PainSignal[] = [];
 
@@ -578,8 +944,32 @@ class Fetchers {
       }
     }
 
+    // 记录查询统计
+    this.queryStats.set('vscode', { signals: results.length, gold: 0 });
+
     console.log(`✅ VSCode: 获得 ${results.length} 个信号`);
     return results;
+  }
+
+  /**
+   * 获取查询统计并触发进化学习
+   */
+  async triggerLearning(scanResults: { goldFound: number; topTools: string[] }): Promise<void> {
+    const totalSignals = Array.from(this.queryStats.values()).reduce((sum, v) => sum + v.signals, 0);
+
+    // 更新查询性能
+    for (const [query, stats] of this.queryStats.entries()) {
+      // 注意：这里只记录总数，详细查询性能由进化引擎处理
+    }
+
+    // 触发 AI 进化
+    if (totalSignals >= 20) {
+      await this.evolutionEngine.triggerEvolution({
+        signalsFound: totalSignals,
+        goldFound: scanResults.goldFound,
+        topTools: scanResults.topTools
+      });
+    }
   }
 
   private extractToolName(text: string): string {
@@ -919,10 +1309,10 @@ class OpportunityHunter {
     const totalStartTime = Date.now();
 
     console.log('='.repeat(60));
-    console.log('🎯 OPPORTUNITY HUNTER v3.0');
+    console.log('🎯 OPPORTUNITY HUNTER v5.6');
     console.log('📡 专注: Twitter / Chrome Store / VSCode');
     console.log('🧠 引擎: DeepSeek 单一综合判断');
-    console.log('🔄 自我进化: 已启用');
+    console.log('🧬 进化: 搜索词自我进化已启用');
     console.log('='.repeat(60));
     console.log(`📅 ${new Date().toLocaleString('zh-CN')}\n`);
 
@@ -963,6 +1353,17 @@ class OpportunityHunter {
         await EmailService.sendReport(this.formatReport(goldens, elapsed));
       } catch (emailError) {
         console.error(`   ⚠️ 邮件发送失败: ${emailError instanceof Error ? emailError.message : '未知错误'}`);
+      }
+
+      // v5.6: 触发搜索词进化学习
+      try {
+        const topTools = goldens.slice(0, 5).map(o => this.extractToolName(o.signal.title));
+        await this.fetchers.triggerLearning({
+          goldFound: goldens.length,
+          topTools
+        });
+      } catch (learnError) {
+        console.error(`   ⚠️ 进化学习失败: ${learnError instanceof Error ? learnError.message : '未知错误'}`);
       }
 
     } catch (error) {
