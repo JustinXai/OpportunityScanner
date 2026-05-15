@@ -1,0 +1,99 @@
+name: Opportunity Radar - 定时扫描
+
+on:
+  schedule:
+    # 每两天凌晨5点北京时间 = UTC 21:00（夏令时）
+    # 北京时间 = UTC + 8，凌晨5点 = 5-8 = -3 = 前一天21点
+    # 使用 0 21 */2 * * 表示每两天21:00 UTC
+    - cron: '0 21 */2 * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '扫描模式'
+        required: false
+        default: 'all-sources'
+        type: choice
+        options:
+          - all-sources
+          - quick
+          - deep
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: |
+          cd opportunity-radar
+          npm install
+
+      - name: Run Radar Scan
+        run: |
+          echo "🚀 启动 Opportunity Radar 扫描..."
+          echo "📅 $(date '+%Y-%m-%d %H:%M:%S')"
+          cd opportunity-radar
+          npm run scan 2>&1
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send Email Report
+        if: always()
+        run: |
+          # 查找最新生成的报告
+          RUN_DIR="opportunity-radar/runs"
+          if [ -d "$RUN_DIR" ]; then
+            LATEST=$(ls -t $RUN_DIR | head -1)
+            if [ -n "$LATEST" ]; then
+              echo "📊 最新报告: $LATEST"
+              # 读取报告内容并发送邮件
+              REPORT_FILE="$RUN_DIR/$LATEST/report.md"
+              if [ -f "$REPORT_FILE" ]; then
+                # 使用 nodemailer 发送邮件（需要在脚本中实现）
+                node -e "
+                  const nodemailer = require('nodemailer');
+                  const fs = require('fs');
+                  const content = fs.readFileSync('$REPORT_FILE', 'utf-8');
+                  const transporter = nodemailer.createTransport({
+                    host: 'smtp.qq.com',
+                    port: 465,
+                    secure: true,
+                    auth: {
+                      user: process.env.SMTP_USER,
+                      pass: process.env.SMTP_PASS
+                    }
+                  });
+                  transporter.sendMail({
+                    from: '\"商机雷达\" <469704940@qq.com>',
+                    to: process.env.EMAIL_TO,
+                    subject: '🚀 Opportunity Radar 扫描报告 - ' + new Date().toLocaleDateString('zh-CN'),
+                    text: content
+                  }).then(() => console.log('✅ 邮件已发送')).catch(e => console.error('❌', e));
+                "
+              fi
+            fi
+          fi
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+
+      - name: Upload Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-results-${{ github.run_number }}
+          path: |
+            opportunity-radar/runs/**/*
+            logs/*.json
+          retention-days: 30
