@@ -1,14 +1,17 @@
 {
   "name": "opportunity-scanner",
   "version": "3.0.0",
-  "description": "商机扫描器 - 双模型AI评估 + 多平台数据采集",
+  "description": "商机扫描器 - V1:僵尸插件扫描 | V2:Signal Event扫描",
   "type": "module",
   "main": "src/OpportunityHunter.ts",
   "scripts": {
     "start": "npx tsx src/OpportunityHunter.ts",
     "scan": "npx tsx src/OpportunityHunter.ts",
     "dev": "npx tsx src/OpportunityHunter.ts",
-    "zombie": "npx tsx src/OpportunityHunter.ts"
+    "zombie": "npx tsx src/OpportunityHunter.ts",
+    "radar": "cd opportunity-radar && npm run scan",
+    "radar:dev": "cd opportunity-radar && npm run dev",
+    "radar:build": "cd opportunity-radar && npm run build"
   },
   "keywords": [
     "opportunity",

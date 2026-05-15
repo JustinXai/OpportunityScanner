@@ -38,13 +38,18 @@ export class GitHubRunner {
 
   constructor(config: GitHubConfig = {}) {
     this.config = config;
+    // GitHub API token (可选，未提供时使用更低限流)
+    const token = config.github_token || process.env.GITHUB_TOKEN;
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     this.client = axios.create({
       baseURL: 'https://api.github.com',
-      headers: {
-        'Authorization': `Bearer ${config.github_token || process.env.GITHUB_TOKEN || ''}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
+      headers,
       timeout: 30000
     });
   }

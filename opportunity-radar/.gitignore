@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+reports/
+logs/
+runs/
+.DS_Store
+*.swp
+deprecated/
