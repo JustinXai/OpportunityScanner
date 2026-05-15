@@ -10,7 +10,10 @@ export type SourceType =
   | "hacker_news"
   | "google_search"
   | "ads_library"
-  | "manual";
+  | "manual"
+  | "telegram"
+  | "dev_to"
+  | "stack_overflow";
 
 export type Decision =
   | "IGNORE"

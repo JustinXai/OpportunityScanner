@@ -148,3 +148,79 @@ github_topics:
   - "mcp"
   - "agent-framework"
   - "ai-billing"
+
+# ===========================================
+# Telegram 频道
+# ===========================================
+telegram_channels:
+  ai_dev:
+    - "ChatGPTNews"
+    - "AINews"
+    - "openai"
+    - "languagetools"
+    - "AI_Tools_News"
+  programming:
+    - "programming"
+    - "python"
+    - "javascript"
+    - "typescript"
+    - "golang"
+  devops:
+    - "devops"
+    - "devops_china"
+    - "docker"
+    - "kubernetes"
+  indie_saas:
+    - "indiehackers"
+    - "saas"
+    - "buildinpublic"
+    - "madeinpublic"
+    - "micro_saas"
+  api_tools:
+    - "postman"
+    - "apifull"
+    - "api_developers"
+
+# ===========================================
+# DEV.to 标签
+# ===========================================
+devto_tags:
+  priority:
+    - "api"
+    - "devops"
+    - "ai"
+    - "chatgpt"
+    - "discuss"
+    - "opensource"
+    - "javascript"
+    - "typescript"
+  other:
+    - "python"
+    - "react"
+    - "webdev"
+    - "cloud"
+    - "docker"
+    - "beginners"
+
+# ===========================================
+# Stack Overflow 标签
+# ===========================================
+stackoverflow_tags:
+  priority:
+    - "api"
+    - "openai"
+    - "llm"
+    - "chatgpt"
+    - "rest"
+    - "authentication"
+    - "javascript"
+    - "python"
+  other:
+    - "typescript"
+    - "react"
+    - "node.js"
+    - "docker"
+    - "kubernetes"
+    - "security"
+    - "performance"
+    - "microservices"

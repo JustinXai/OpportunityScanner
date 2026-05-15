@@ -15,6 +15,9 @@ import { GitHubRunner } from './sources/github.js';
 import { HackerNewsRunner } from './sources/hackernews.js';
 import { RedditRunner } from './sources/reddit.js';
 import { IndieHackersRunner } from './sources/indiehackers.js';
+import { TelegramRunner } from './sources/telegram.js';
+import { DevToRunner } from './sources/devto.js';
+import { StackOverflowRunner } from './sources/stackoverflow.js';
 
 // 分类器
 import { SignalClassifier } from './classifiers/signal-classifier.js';
@@ -46,7 +49,7 @@ export class OpportunityRadar {
       serper_api_key: process.env.SERPER_API_KEY,
       ph_api_token: process.env.PH_API_TOKEN,
       github_token: process.env.GITHUB_TOKEN,
-      enabled_sources: ['product_hunt', 'github', 'hacker_news', 'reddit', 'indie_hackers'],
+      enabled_sources: ['product_hunt', 'github', 'hacker_news', 'reddit', 'indie_hackers', 'telegram', 'dev_to', 'stack_overflow'],
       scan_interval_days: 2,
       max_signals_per_source: 50,
       build_threshold: 85,
@@ -277,6 +280,44 @@ export class OpportunityRadar {
         this.addSource(sources, 'indie_hackers');
       } catch (error: any) {
         console.log(`   ⚠️ Indie Hackers 采集失败: ${error.message}`);
+      }
+    }
+
+    // ========== 新增数据源 ==========
+
+    // Telegram
+    if (sources.includes('telegram')) {
+      try {
+        const tgRunner = new TelegramRunner();
+        const signals = await tgRunner.fetchAllChannels();
+        allSignals.push(...signals);
+        this.addSource(sources, 'telegram');
+      } catch (error: any) {
+        console.log(`   ⚠️ Telegram 采集失败: ${error.message}`);
+      }
+    }
+
+    // DEV.to
+    if (sources.includes('dev_to')) {
+      try {
+        const devRunner = new DevToRunner();
+        const signals = await devRunner.fetchAllTags();
+        allSignals.push(...signals);
+        this.addSource(sources, 'dev_to');
+      } catch (error: any) {
+        console.log(`   ⚠️ DEV.to 采集失败: ${error.message}`);
+      }
+    }
+
+    // Stack Overflow
+    if (sources.includes('stack_overflow')) {
+      try {
+        const soRunner = new StackOverflowRunner();
+        const signals = await soRunner.fetchAllTags();
+        allSignals.push(...signals);
+        this.addSource(sources, 'stack_overflow');
+      } catch (error: any) {
+        console.log(`   ⚠️ Stack Overflow 采集失败: ${error.message}`);
       }
     }
 
