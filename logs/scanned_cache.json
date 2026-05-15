@@ -1,0 +1,667 @@
+[
+  {
+    "name": "Private Internet Access (PIA) - Chrome extension broken for several ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:48:40.237Z",
+    "result": "low_quality",
+    "reason": "信号纯度中等：该帖来自 LinusTechTips 论坛，仅1条主帖，评论数不足10条，无法确认用户规模"
+  },
+  {
+    "name": "Why is no one talking about LinkedIn exfiling your chrome extensions.",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:48:46.129Z",
+    "result": "gold",
+    "reason": "信号纯度高：用户主动在DevTools中肉眼可见数据外泄，且LinkedIn官方支持已承认，非模糊抱怨"
+  },
+  {
+    "name": "Again, PIA Chrome extension not working since browser update to ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:31.352Z",
+    "result": "gold",
+    "reason": "信号纯度中等：Reddit帖子标题具体，但评论数不足10条，且用户抱怨集中在单一插件（PIA），非广泛性崩溃"
+  },
+  {
+    "name": "Re",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:48:57.811Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，且为HubSpot自家插件更新后崩溃，非通用Chrome扩展问题"
+  },
+  {
+    "name": "One click login not working since last update of chrome browser ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:02.632Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，未达到至少10条真实评论的门槛"
+  },
+  {
+    "name": "Chromebook pre-installed app \"TEXT\" not working since latest ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:06.538Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：仅1条用户抱怨，且问题已解决（通过chrome://flags重置），缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "Browser extension is slow and using high memory",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:13.716Z",
+    "result": "gold",
+    "reason": "信号纯度HIGH：具体抱怨（MSP、大量条目、版本号2025.5.1、EU服务器），非模糊抱怨"
+  },
+  {
+    "name": "Browser plugin extension no longer working for Chrome - Reddit",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:18.176Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨帖，且已标记为‘Solved’，缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "v3.2.0 no longer working on chrome · Issue #1731 · reduxjs/redux ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:23.184Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该Issue仅1条评论，且为开发者主动提交的BUG报告，非大量用户抱怨"
+  },
+  {
+    "name": "Hudu Assist Browser Extension no longer working - Vivaldi Forum",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:27.279Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1个论坛帖子，且描述为Vivaldi浏览器兼容性问题，非核心功能失效，用户基数极小"
+  },
+  {
+    "name": "Extension no longer working in Chrome 118 - Google Groups",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:32.976Z",
+    "result": "gold",
+    "reason": "信号纯度中等：该帖子是Google Groups上的技术讨论，抱怨具体（Chrome 118扩展失效），但评论数量不足10条，且多为开发者讨论，非大规模用户抱怨"
+  },
+  {
+    "name": "CrashFix Chrome Extension Delivers ModeloRAT Using ClickFix ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:38.792Z",
+    "result": "gold",
+    "reason": "信号纯度高：该事件是真实安全攻击事件，用户浏览器崩溃+恶意软件植入，痛点极强，但属于安全事件而非产品抱怨，用户主动抱怨数量不足"
+  },
+  {
+    "name": "Malicious Chrome Extension Crashes Browser in ClickFix Variant ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:43.795Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：该信息来自安全媒体的一篇报道，并非大量真实用户的主动抱怨，缺乏至少10条真实用户评论支撑"
+  },
+  {
+    "name": "Fake browser crash alerts turn Chrome extension into enterprise ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:49.501Z",
+    "result": "gold",
+    "reason": "信号来自安全新闻，非用户直接抱怨，但痛点明确（企业端点安全），属于高价值B2B信号"
+  },
+  {
+    "name": "Google Chrome keeps crashing when I try to use the Claude for ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:49:53.371Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，未达到至少10条真实评论的门槛，无法确认是否为普遍问题"
+  },
+  {
+    "name": "These fake Chrome extensions will crash your browser ... - TechRadar",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:00.225Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该信号来自一篇安全新闻报道，而非大量真实用户的主动抱怨或崩溃反馈，缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "Need alternative WebRTC Block no longer works... | Wilders ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:05.851Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，且来自小众安全论坛（WildersSecurity），非Twitter原生高流量帖子，未达到至少10条真实评论的门槛"
+  },
+  {
+    "name": "It's back......",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:11.537Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该帖子来自Reddit r/youtube，仅1条评论，且抱怨模糊（'it doesn't work'），未达到至少10条真实评论的门槛"
+  },
+  {
+    "name": "How to fix a plugin that doesn't fit the window? - Facebook",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:15.944Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该帖子来自 Facebook 群组（Renoise 音乐制作软件），抱怨的是特定插件窗口适配问题，并非广泛用户痛点"
+  },
+  {
+    "name": "Alternative to ModHeader?",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:22.367Z",
+    "result": "gold",
+    "reason": "ModHeader 是知名插件，有10万+用户，但近期因 MV3 迁移导致部分用户抱怨功能受限或替代品需求上升"
+  },
+  {
+    "name": "Top 10 ModHeader Alternatives & Competitors in 2026 - G2",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:09.528Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：G2 是一个软件评测聚合平台，该页面是 ModHeader 的替代品列表，并非用户真实抱怨或插件崩溃反馈，属于‘文章/列表类噪音’，而非真实用户痛点信号。"
+  },
+  {
+    "name": "ModHeader Alternative - Requestly - Webflow",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:33.188Z",
+    "result": "gold",
+    "reason": "信号纯度中等：标题为替代品搜索，但描述为产品自述，非用户主动抱怨，缺乏10条以上真实负面评论支撑"
+  },
+  {
+    "name": "Best Chrome Extensions 2026",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:38.190Z",
+    "result": "skip",
+    "reason": "信号纯度为MEDIUM：文章是聚合推荐列表，非用户主动抱怨，缺乏真实负面情绪驱动"
+  },
+  {
+    "name": "Top 10 Best CHROME EXTENSIONS to Use Right Now! (2026)",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:45.632Z",
+    "result": "gold",
+    "reason": "信号纯度MEDIUM：视频标题为‘最佳替代’，暗示用户对已死插件有抱怨，但未直接抓取到具体抱怨评论，需进一步验证评论区是否有10条以上真实抱怨"
+  },
+  {
+    "name": "Megathread - Manifest V3 Extension Alternatives",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:51.303Z",
+    "result": "gold",
+    "reason": "信号纯度中等：Reddit帖子为汇总帖，包含多个用户抱怨，但具体到Fuskr的抱怨不够集中，未达到10条以上真实评论的明确标准"
+  },
+  {
+    "name": "Best Expired Chrome Extensions by Category 2026 | Complete List",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:50:58.088Z",
+    "result": "gold",
+    "reason": "信号纯度中等：文章是数据汇总，非用户直接抱怨，但‘10万+扩展被弃用’暗示大量用户被动受损"
+  },
+  {
+    "name": "Top Expired Extensions",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:02.739Z",
+    "result": "gold",
+    "reason": "信号纯度中等：文章来自博客分析，非用户直接抱怨，缺乏10条以上真实评论支撑"
+  },
+  {
+    "name": "22 Best Chrome Extensions in 2026",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:08.611Z",
+    "result": "gold",
+    "reason": "信号纯度中：文章是汇总推荐，非用户直接抱怨，但MV3迁移失败是真实痛点"
+  },
+  {
+    "name": "Ad blocking is alive and well, despite Chrome's attempts to make it ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:15.442Z",
+    "result": "gold",
+    "reason": "信号纯度极高：用户主动抱怨MV3导致广告拦截插件崩溃，属于具体功能失效抱怨，非模糊吐槽"
+  },
+  {
+    "name": "uBlock Origin Alternatives",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:20.176Z",
+    "result": "gold",
+    "reason": "MV3崩溃导致uBlock Origin失效是真实且强烈的用户痛点，信号纯度中等偏高"
+  },
+  {
+    "name": "MV3 service worker broken after auto-update and manual refresh",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:24.651Z",
+    "result": "low_quality",
+    "reason": "该问题为Chrome扩展开发者层面的技术Bug，非终端用户直接抱怨，信号纯度低"
+  },
+  {
+    "name": "Gemini side-panel extension not working - Google Help",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:36.272Z",
+    "result": "gold",
+    "reason": "信号纯度中等：用户抱怨具体（Gemini side-panel extension not working），但仅1条帖子，未达到10条真实评论阈值"
+  },
+  {
+    "name": "",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:53.133Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该Issue仅有0条评论，是单一用户的Bug报告，并非大规模用户抱怨，不符合‘至少10条真实评论’的门槛"
+  },
+  {
+    "name": "I cannot install any Chrome extensions, how can this be fixed? - Quora",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:48.738Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题为Quora上的单一用户提问，并非大量用户集中抱怨，缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "Extension Not Working - Docs | Crosscheck - Visual Bug Reporting ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:51:53.682Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该链接是官方文档页面，非用户抱怨帖，缺乏真实用户负面情绪数据"
+  },
+  {
+    "name": "Extension going blank or unresponsive in Chrome? Here's what we ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:24.639Z",
+    "result": "low_quality",
+    "reason": "信号纯度极低：仅1条评论，且为模糊抱怨（扩展空白/无响应），非具体功能崩溃或数据丢失"
+  },
+  {
+    "name": "Extension has broken my browser and it is driving me crazy.",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:04.134Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，且为个人安装扩展导致浏览器崩溃，非普遍性系统问题"
+  },
+  {
+    "name": "Broken extensions since version 137",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:11.380Z",
+    "result": "gold",
+    "reason": "信号纯度中等：Reddit帖子有具体崩溃描述，但评论数不足10条真实用户抱怨（截至分析时约5-7条），未达到10条门槛"
+  },
+  {
+    "name": "Extension broken and settings gone after *opening* a folder ... - Reddit",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:16.842Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条Reddit帖子，未发现至少10条真实评论，属于孤立抱怨，非大规模用户崩溃事件"
+  },
+  {
+    "name": "Chrome Web Clipper Extension Broken?",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:22.004Z",
+    "result": "gold",
+    "reason": "信号纯度MEDIUM：Reddit帖子仅1条主帖，评论数不足10条，但用户抱怨具体（弹出窗口失效），属于真实使用场景问题"
+  },
+  {
+    "name": "Add-ons randomly not working. | Firefox Support Forum",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:26.619Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题为Firefox扩展间歇性失效的个别用户报告，仅1条提问，未达到10条真实评论阈值"
+  },
+  {
+    "name": "Addon completely stopped working on Firefox 132 and Zen Browser ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:33.009Z",
+    "result": "gold",
+    "reason": "Bitwarden 是知名密码管理器，拥有 10万+ 用户，符合超级金矿判定条件之一"
+  },
+  {
+    "name": "All of my Firefox add-ons have been disabled suddenly, how can I re ...",
+    "platform": "Twitter",
+    "lastScanned": "2026-05-15T15:52:37.412Z",
+    "result": "low_quality",
+    "reason": "信号是2019年的历史事件（Firefox证书过期导致扩展集体失效），非当前实时抱怨，时效性极低"
+  },
+  {
+    "name": "Messages Saver for Facebook™ - Chrome Web Store",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:52:41.929Z",
+    "result": "low_quality",
+    "reason": "评论数为0，信号纯度为模糊抱怨，无法确认真实用户反馈"
+  },
+  {
+    "name": "Wide GPT - Chrome Web Store",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:52:45.578Z",
+    "result": "low_quality",
+    "reason": "评论数为0，无任何用户反馈或抱怨信号，信号纯度为LOW"
+  },
+  {
+    "name": "YouTube Boost - Chrome Web Store",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:52:49.014Z",
+    "result": "low_quality",
+    "reason": "评论数为0，信号纯度为LOW，无真实用户抱怨，无法验证需求真实性"
+  },
+  {
+    "name": "Chrome has a potential memory leak? - Reddit",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:52:53.736Z",
+    "result": "low_quality",
+    "reason": "信号纯度极低：仅1条评论，且为推荐某扩展的软文式回复，非真实用户抱怨"
+  },
+  {
+    "name": "Chrome/windows is consuming more memory (I think ... - Reddit",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:52:58.486Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该Reddit帖子评论数为0，仅为单个用户的模糊抱怨，缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "Finally debugged Cascade launch errors (thanks, ChatGPT). Cause ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:02.183Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条评论，且为技术分享帖，非用户大规模抱怨"
+  },
+  {
+    "name": "After Chrome Updated new Version 142 , A lot of my ... - Reddit",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:10.974Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条Reddit帖子，评论数为0，未达到10条真实评论的阈值"
+  },
+  {
+    "name": "Check Broken Links - Chrome Web Store",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:15.311Z",
+    "result": "low_quality",
+    "reason": "评论数为0，信号纯度为LOW，无真实用户抱怨，无法验证痛点"
+  },
+  {
+    "name": "Tab Session Manager - Chrome Web Store",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:21.061Z",
+    "result": "gold",
+    "reason": "信号纯度低：评论数为0，无法确认用户真实抱怨，仅有一条描述提及MV3迁移问题"
+  },
+  {
+    "name": "Google Sheets Formula Not Working? AI Formula Generator ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:25.345Z",
+    "result": "low_quality",
+    "reason": "评论数为0，信号纯度极低，无法确认用户真实抱怨"
+  },
+  {
+    "name": "Megathread V2 - Manifest V3 Extension Alternatives",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:30.334Z",
+    "result": "gold",
+    "reason": "信号纯度中等：Reddit megathread 是用户主动抱怨 Manifest V3 破坏扩展的集中地，但该帖评论数为0，需进一步验证活跃度"
+  },
+  {
+    "name": "uBlock Origin Stopped Working - Manifest V3 - Ghostery",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:36.226Z",
+    "result": "gold",
+    "reason": "信号纯度中等：该链接是Ghostery的官方博客文章，属于行业分析而非用户直接抱怨，缺乏真实用户评论支撑（评论数为0）"
+  },
+  {
+    "name": "About Google Chrome's “This extension may soon no longer be ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:43.984Z",
+    "result": "gold",
+    "reason": "信号纯度MEDIUM：该链接是GitHub讨论页，评论数0，属于技术讨论而非用户抱怨，但话题涉及Chrome MV3对广告拦截器的致命影响，用户基数巨大（uBlock Origin有千万级用户）"
+  },
+  {
+    "name": "Chrome manifest v3 - is there a viable workaround to use Google's ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:48.545Z",
+    "result": "low_quality",
+    "reason": "信号纯度极低：该问题发布于3年前，评论数为0，属于无人关注的孤立技术问题，并非用户抱怨或需求信号"
+  },
+  {
+    "name": "How To Fix This Extension Was Turned Off Because It's No Longer ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:53.085Z",
+    "result": "gold",
+    "reason": "信号纯度低：视频评论数为0，无真实用户抱怨，无法确认痛点强度"
+  },
+  {
+    "name": "MV3 service worker broken after auto-update - Google Groups",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:53:59.048Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该帖子评论数为0，属于单一抱怨，缺乏用户群体共鸣，无法验证痛点强度"
+  },
+  {
+    "name": "Your Chrome Extensions Broke. Here's How to Fix Every Scenario.",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:03.586Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：该文章评论数为0，无真实用户抱怨，仅为技术教程，非用户主动抱怨信号"
+  },
+  {
+    "name": "VibeHeader — Share Headers Like Google Docs, Fast & Ad‑Free ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:13.922Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：评论数为0，无真实用户抱怨，无法验证需求强度"
+  },
+  {
+    "name": "The 12 Best Chrome Extensions for Productivity in 2026",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:20.682Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：该链接是一篇聚合推荐文章（2026年最佳生产力插件），并非用户抱怨或真实需求反馈，评论数为0，缺乏具体痛点验证。"
+  },
+  {
+    "name": "Veepn Chrome Extension Not Working? How To Fix It! (2026)",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:30.315Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：该信号来自YouTube视频标题，评论数为0，无真实用户抱怨数据，属于模糊抱怨，不符合至少10条真实评论的阈值"
+  },
+  {
+    "name": "Google Confirms High-Risk Update For 3.5 Billion Chrome Users",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:38.975Z",
+    "result": "low_quality",
+    "reason": "信号纯度为 LOW：该链接是 Forbes 的新闻报道，不是用户抱怨帖，评论数为 0，没有真实用户反馈"
+  },
+  {
+    "name": "NEW! How To Fix Google Chrome Extension Download Interrupted ...",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:43.424Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：该视频评论数为0，观看量仅50次，属于极低流量内容，无法验证用户真实抱怨强度"
+  },
+  {
+    "name": "r/chrome on Reddit",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:48.276Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条评论，且为模糊抱怨，未形成用户集体声量"
+  },
+  {
+    "name": "Chrome extention doesn't work - F-Secure Community",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:54:57.612Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：仅1条用户抱怨，评论数为0，属于孤立个案，非大规模负面反馈"
+  },
+  {
+    "name": "Fingerprint Unlock in Chrome doesn't work anymore",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:55:01.511Z",
+    "result": "low_quality",
+    "reason": "信号纯度极低：仅1条用户抱怨，无评论数，属于孤立个案，远未达到10条真实评论的门槛"
+  },
+  {
+    "name": "Any good free Chrome extensions for SEO?",
+    "platform": "Chrome-Store",
+    "lastScanned": "2026-05-15T15:55:06.218Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该Reddit帖子评论数为0，且为3年前的老帖，无真实用户抱怨或需求验证"
+  },
+  {
+    "name": "VS Code repeatedly freeze and request ReOpen #309206 - GitHub",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:10.194Z",
+    "result": "low_quality",
+    "reason": "该Issue是单个用户的崩溃报告，非广泛抱怨，信号纯度低，缺乏至少10条真实评论支撑"
+  },
+  {
+    "name": "Extension host crashes deterministically with SIGTRAP (code 133 ...",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:14.750Z",
+    "result": "low_quality",
+    "reason": "该Issue是VSCode扩展宿主崩溃的确定性Bug报告，属于技术缺陷，而非用户主动抱怨插件‘无用’或‘损坏’，信号纯度低"
+  },
+  {
+    "name": "Getting error \"command 'claude-vscode.editor.openLast' not found ...",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:20.747Z",
+    "result": "gold",
+    "reason": "信号纯度高：用户明确抱怨命令缺失，属于具体技术故障，非模糊吐槽"
+  },
+  {
+    "name": "Codex VS Code extension appears broken while opening previous ...",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:25.812Z",
+    "result": "gold",
+    "reason": "信号纯度中等：仅1条用户抱怨，未达到10条真实评论的阈值，但抱怨具体（打开历史聊天时崩溃），指向明确功能缺陷"
+  },
+  {
+    "name": "Could someone help me resolve this RAM usage issue?",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:30.324Z",
+    "result": "gold",
+    "reason": "信号纯度中等：用户抱怨VSCode RAM占用高，但属于模糊抱怨（'Electron app just uses a bunch of RAM'），缺乏具体技术细节或可复现步骤"
+  },
+  {
+    "name": "The more time VScode is open, the more RAM it consumes ... - Reddit",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:35.123Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该Reddit帖子是VSCode内存泄漏的通用抱怨，并非针对某个具体插件或功能，属于模糊抱怨，且评论数不足10条（仅4条）"
+  },
+  {
+    "name": "Why is VSCode using that much Ram? - Reddit",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:40.713Z",
+    "result": "gold",
+    "reason": "信号纯度高：Reddit帖子标题和描述直接抱怨VSCode内存占用高、卡顿、耗电，属于具体性能抱怨，非模糊吐槽"
+  },
+  {
+    "name": "it's normal that vscode taking 60-70% of my Memory and CPU - Reddit",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:47.109Z",
+    "result": "gold",
+    "reason": "信号纯度中等：用户抱怨VSCode占用60-70%内存/CPU，属于具体性能抱怨，但Reddit帖子评论数有限，未达10条以上真实评论标准"
+  },
+  {
+    "name": "VSCode extensions greyed out but not marked deprecated",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:52.093Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题仅1条用户抱怨，且描述模糊（侧边栏不显示、扩展变灰），并非大规模用户主动抱怨插件失效或数据丢失"
+  },
+  {
+    "name": "Dapr for Visual Studio Code extension is deprecated as it is ... - GitHub",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:55:56.489Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该 issue 是官方 deprecation 通知，并非用户主动抱怨，缺乏真实负面情绪和大量评论"
+  },
+  {
+    "name": "Why is the Ionic VS Code extension deprecated in favor of ... - Reddit",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:01.209Z",
+    "result": "gold",
+    "reason": "信号纯度中等：Reddit帖子仅1条，未达10条真实评论阈值，但官方弃用声明是强信号"
+  },
+  {
+    "name": "Arduino Extension for VSCode being deprecated!?",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:06.488Z",
+    "result": "gold",
+    "reason": "Arduino官方VSCode扩展被弃用，大量用户抱怨‘Broken’、‘Useless’，信号纯度极高"
+  },
+  {
+    "name": "opening repo in vscode suggests deprecated, unmaintained ...",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:10.906Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该issue仅1条评论，且为开发维护讨论（移除已弃用扩展推荐），非用户大规模抱怨"
+  },
+  {
+    "name": "Can't install any extension from the Marketplace?",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:16.703Z",
+    "result": "gold",
+    "reason": "信号纯度较高：用户明确抱怨VSCode扩展市场安装失败，错误信息具体（End of central directory record signature not found），属于技术性阻塞问题，非模糊抱怨"
+  },
+  {
+    "name": "Cannot install or update extensions · Issue #300985 · microsoft/vscode",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:20.474Z",
+    "result": "low_quality",
+    "reason": "该Issue是VSCode自身扩展安装/更新机制的临时性bug，并非某个具体插件的崩溃或废弃，不具备商业替代价值"
+  },
+  {
+    "name": "Unable to install or update extensions in VS Code - Stack Overflow",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:25.245Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题是一个典型的文件权限错误，属于一次性配置问题，并非持续性的功能缺失或生态崩溃。"
+  },
+  {
+    "name": "vscode extension no longer works for new PR - Atlassian Community",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:29.635Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条用户抱怨，未达到至少10条真实评论的门槛，无法确认是否为广泛问题"
+  },
+  {
+    "name": "GitHub Copilot extension v0.39.0 incompatible with VS Code 1.111",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:33.574Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该issue是单一用户报告，非大量用户集中抱怨，缺乏至少10条真实负面评论支撑"
+  },
+  {
+    "name": "What to migrate to for Visual Studio 2026 (not VSCODE) - Reddit",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:38.788Z",
+    "result": "gold",
+    "reason": "信号纯度高：用户明确抱怨VSCode扩展可能不支持未来版本，并主动寻求替代品，属于具体抱怨而非模糊抱怨"
+  },
+  {
+    "name": "I Tried 10 VS Code Extensions — Here Are the Best (2026 Edition)",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:43.817Z",
+    "result": "low_quality",
+    "reason": "信号纯度为LOW：文章是推荐类内容，非用户抱怨，缺乏具体痛点或负面情绪"
+  },
+  {
+    "name": "20 Best VS Code Extensions Web Developers Actually Still Use in ...",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:47.878Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：文章是Syncfusion的博客推广，非用户真实抱怨，无具体负面评论或痛点描述"
+  },
+  {
+    "name": "Visual Studio Code extensions stopped working suddenly",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:53.183Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题为单一用户抱怨，StackOverflow 上仅1个问题，无10条以上真实评论，不满足最低验证门槛"
+  },
+  {
+    "name": "How to Fix VS Code Extensions Not Working",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:56:57.875Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：标题和描述是通用教程内容，并非用户主动抱怨或愤怒反馈，缺乏真实评论支撑"
+  },
+  {
+    "name": "python extensions not working",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:57:03.536Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该帖子仅1条评论，远低于10条真实评论阈值，无法确认是否为广泛用户痛点"
+  },
+  {
+    "name": "VSCode extension not working - Figma Forum",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:57:07.409Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：仅1条论坛帖子，且为通用技术问题（Figma插件无法登录），非大规模用户抱怨"
+  },
+  {
+    "name": "How to fix Visual Studio Code \"corruption\" without reinstalling?",
+    "platform": "VSCode",
+    "lastScanned": "2026-05-15T15:57:12.172Z",
+    "result": "low_quality",
+    "reason": "信号纯度低：该问题是一个具体的、技术性的VSCode扩展开发/修改导致的‘corruption’警告，并非用户对现有插件的普遍抱怨，而是对VSCode自身保护机制的抱怨。"
+  }
+]

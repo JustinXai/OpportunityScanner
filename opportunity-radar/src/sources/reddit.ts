@@ -1,190 +1,218 @@
-// Reddit 搜索采集器
-// 采集真实抱怨和小 MRR 自曝
+// Reddit 搜索采集器 V2
+// 使用 Serper 搜索 + 进化引擎
+// 支持关键词裂变和防重复采集
 
-import axios, { AxiosInstance } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import type { RawSignal, SourceType } from '../types.js';
-
-interface RedditConfig {
-  serper_api_key?: string;
-  keywords?: {
-    reddit_search?: {
-      subreddits?: string[];
-      keywords?: string[];
-    };
-  };
-}
+import type { RawSignal } from '../types.js';
+import { SerperClient } from '../serper-client.js';
+import { ScanCacheManager, EvolutionEngine } from '../evolution-engine.js';
 
 export class RedditRunner {
-  private client: AxiosInstance;
-  private config: RedditConfig;
+  private serper: SerperClient;
+  private evolution: EvolutionEngine;
+  private cache: ScanCacheManager;
 
-  constructor(config: RedditConfig = {}) {
-    this.config = config;
-    this.client = axios.create({
-      baseURL: 'https://google.serper.dev/search',
-      headers: {
-        'X-API-KEY': config.serper_api_key || process.env.SERPER_API_KEY || '',
-        'Content-Type': 'application/json'
-      },
-      timeout: 30000
-    });
+  constructor(cache: ScanCacheManager, evolution: EvolutionEngine) {
+    this.cache = cache;
+    this.evolution = evolution;
+    this.serper = new SerperClient(cache);
   }
 
   /**
-   * 搜索 Reddit
+   * 搜索 Reddit 痛点
    */
-  async search(keywords: string[], maxResults: number = 20): Promise<RawSignal[]> {
-    console.log(`\n💬 [Reddit] 搜索 Reddit 讨论...`);
+  async searchPainPoints(keywords?: string[]): Promise<RawSignal[]> {
+    const baseKeywords = keywords || [
+      'API broken', 'API not working', 'LLM cost too high',
+      'overcharged', 'fake model', 'quota disappeared',
+      'rate limited', 'billing surprise', 'API key leaked',
+      'API gateway alternative', 'LLM proxy broken'
+    ];
+
+    console.log(`\n💬 [Reddit] 搜索痛点 (${baseKeywords.length} 个关键词)...`);
+
+    // 获取进化后的关键词
+    const evolvedKeywords = this.evolution.getNextKeywords('reddit', baseKeywords);
+    const searchKeywords = evolvedKeywords.slice(0, 15);
 
     const signals: RawSignal[] = [];
 
-    for (const keyword of keywords.slice(0, 8)) {
-      try {
-        // 搜索 site:reddit.com
-        const query = `"${keyword}" site:reddit.com`;
+    for (const keyword of searchKeywords) {
+      const query = `"${keyword}" site:reddit.com`;
+      const results = await this.serper.searchWithDedup(query, { num: 10 });
 
-        const response = await this.client.post('', {
-          q: query,
-          num: maxResults
+      for (const item of results) {
+        if (!item.link?.includes('/r/') || !item.link?.includes('/comments/')) continue;
+
+        signals.push({
+          id: uuidv4(),
+          source_type: 'reddit',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [keyword]
         });
 
-        const items = response.data?.organic || [];
-
-        for (const item of items) {
-          const signal = this.itemToSignal(item, keyword);
-          if (signal) {
-            signals.push(signal);
-          }
-        }
-
-        console.log(`   💬 "${keyword}": ${items.length} 条结果`);
-
-        await this.sleep(1000);
-
-      } catch (error: any) {
-        console.log(`   ⚠️ 搜索 "${keyword}" 失败: ${error.message}`);
+        this.cache.markScanned(item.link, item.title);
       }
+
+      await this.sleep(1200);
     }
 
-    const uniqueSignals = this.deduplicate(signals);
+    // 记录性能
+    this.evolution.recordQueryPerformance('reddit', 'pain_points', signals.length, 0);
 
-    console.log(`   ✅ 采集到 ${uniqueSignals.length} 个 Reddit 信号`);
-    return uniqueSignals;
-  }
-
-  /**
-   * 搜索特定子版
-   */
-  async searchSubreddits(keywords: string[], subreddits: string[]): Promise<RawSignal[]> {
-    console.log(`\n💬 [Reddit] 搜索特定子版...`);
-
-    const signals: RawSignal[] = [];
-
-    for (const keyword of keywords.slice(0, 5)) {
-      for (const subreddit of subreddits.slice(0, 5)) {
-        try {
-          const query = `"${keyword}" site:reddit.com/r/${subreddit}`;
-
-          const response = await this.client.post('', {
-            q: query,
-            num: 10
-          });
-
-          const items = response.data?.organic || [];
-
-          for (const item of items) {
-            const signal = this.itemToSignal(item, keyword);
-            if (signal) {
-              signals.push(signal);
-            }
-          }
-
-          await this.sleep(500);
-
-        } catch (error: any) {
-          console.log(`   ⚠️ 搜索 r/${subreddit} 失败`);
-        }
-      }
-    }
-
-    const uniqueSignals = this.deduplicate(signals);
-
-    console.log(`   ✅ 采集到 ${uniqueSignals.length} 个子版信号`);
-    return uniqueSignals;
+    console.log(`   ✅ 采集到 ${signals.length} 个 Reddit 痛点信号`);
+    return signals;
   }
 
   /**
    * 搜索赚钱自曝
    */
-  async searchRevenue(): Promise<RawSignal[]> {
+  async searchRevenue(keywords?: string[]): Promise<RawSignal[]> {
+    const baseKeywords = keywords || [
+      'MRR reached', '$ MRR', 'paying customers',
+      'first revenue', 'Stripe screenshot', 'hit $',
+      'SaaS revenue', 'side project income'
+    ];
+
     console.log(`\n💰 [Reddit] 搜索 MRR 自曝...`);
 
-    const keywords = [
-      '$ MRR', 'MRR in weeks', 'paying customers', 'first customer',
-      'Stripe screenshot', 'TrustMRR', 'hit $', 'verified listing',
-      'revenue', 'profit margin'
-    ];
+    const evolvedKeywords = this.evolution.getNextKeywords('reddit', baseKeywords);
+    const searchKeywords = evolvedKeywords.slice(0, 10);
 
-    return this.search(keywords, 15);
+    const signals: RawSignal[] = [];
+
+    for (const keyword of searchKeywords) {
+      const query = `"${keyword}" site:reddit.com`;
+      const results = await this.serper.searchWithDedup(query, { num: 8 });
+
+      for (const item of results) {
+        if (!item.link?.includes('/r/')) continue;
+
+        signals.push({
+          id: uuidv4(),
+          source_type: 'reddit',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [keyword]
+        });
+
+        this.cache.markScanned(item.link, item.title);
+      }
+
+      await this.sleep(1000);
+    }
+
+    this.evolution.recordQueryPerformance('reddit', 'revenue', signals.length, 0);
+
+    console.log(`   ✅ 采集到 ${signals.length} 个 Reddit 赚钱信号`);
+    return signals;
   }
 
   /**
-   * 搜索痛点抱怨
+   * 搜索特定子版
    */
-  async searchPainPoints(): Promise<RawSignal[]> {
-    console.log(`\n😤 [Reddit] 搜索痛点抱怨...`);
+  async searchSubreddits(subreddits: string[], keywords: string[]): Promise<RawSignal[]> {
+    console.log(`\n💬 [Reddit] 搜索特定子版...`);
 
-    const keywords = [
-      'overcharged', 'fake model', 'not working', 'refund',
-      'quota disappeared', 'usage mismatch', 'token count wrong',
-      'API key leaked', 'rate limited', 'billing surprise'
-    ];
+    const signals: RawSignal[] = [];
 
-    return this.search(keywords, 15);
+    for (const subreddit of subreddits.slice(0, 5)) {
+      for (const keyword of keywords.slice(0, 5)) {
+        const query = `"${keyword}" site:reddit.com/r/${subreddit}`;
+        const results = await this.serper.searchWithDedup(query, { num: 8 });
+
+        for (const item of results) {
+          signals.push({
+            id: uuidv4(),
+            source_type: 'reddit',
+            source_url: item.link,
+            source_title: item.title,
+            source_date: new Date().toISOString().split('T')[0],
+            raw_content: `${item.title}\n${item.snippet || ''}`,
+            discovered_at: new Date().toISOString(),
+            keywords_matched: [keyword, subreddit]
+          });
+
+          this.cache.markScanned(item.link, item.title);
+        }
+
+        await this.sleep(800);
+      }
+    }
+
+    return signals;
   }
 
   /**
-   * Item 转信号
+   * 从关键词裂变新搜索
    */
-  private itemToSignal(item: any, matchedKeyword: string): RawSignal | null {
-    const url = item.link || '';
+  async fissionAndSearch(baseKeywords: string[]): Promise<RawSignal[]> {
+    console.log(`\n🔀 [Reddit] 关键词裂变搜索...`);
 
-    // 只保留 Reddit 链接
-    if (!url.includes('reddit.com')) return null;
+    // 先执行基础搜索获取结果
+    const allResults: RawSignal[] = [];
 
-    // 排除子版列表页
-    if (url.includes('/r/') && !url.match(/\/r\/[\w]+\/comments\//)) return null;
+    for (const kw of baseKeywords.slice(0, 10)) {
+      const query = `"${kw}" site:reddit.com`;
+      const results = await this.serper.searchWithDedup(query, { num: 15 });
 
-    const title = item.title || '';
+      for (const item of results) {
+        allResults.push({
+          id: uuidv4(),
+          source_type: 'reddit',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [kw]
+        });
+      }
 
-    return {
-      id: uuidv4(),
-      source_type: 'reddit',
-      source_url: url,
-      source_title: title,
-      source_date: new Date().toISOString().split('T')[0],
-      raw_content: `${title}\n${item.snippet || ''}`,
-      discovered_at: new Date().toISOString(),
-      keywords_matched: [matchedKeyword]
-    };
+      await this.sleep(1000);
+    }
+
+    // 裂变新关键词
+    const newKeywords = this.evolution.fissionKeywords('reddit', allResults, allResults);
+
+    if (newKeywords.length > 0) {
+      console.log(`   🧬 裂变出 ${newKeywords.length} 个新关键词: ${newKeywords.slice(0, 5).join(', ')}...`);
+
+      // 用新关键词搜索
+      for (const kw of newKeywords.slice(0, 10)) {
+        const query = `"${kw}" site:reddit.com`;
+        const results = await this.serper.searchWithDedup(query, { num: 10 });
+
+        for (const item of results) {
+          allResults.push({
+            id: uuidv4(),
+            source_type: 'reddit',
+            source_url: item.link,
+            source_title: item.title,
+            source_date: new Date().toISOString().split('T')[0],
+            raw_content: `${item.title}\n${item.snippet || ''}`,
+            discovered_at: new Date().toISOString(),
+            keywords_matched: [kw, 'fission']
+          });
+
+          this.cache.markScanned(item.link, item.title);
+        }
+
+        await this.sleep(1000);
+      }
+    }
+
+    console.log(`   ✅ 共采集 ${allResults.length} 个信号（含裂变）`);
+    return allResults;
   }
 
-  /**
-   * 去重
-   */
-  private deduplicate(signals: RawSignal[]): RawSignal[] {
-    const seen = new Set<string>();
-    return signals.filter(s => {
-      if (seen.has(s.source_url)) return false;
-      seen.add(s.source_url);
-      return true;
-    });
-  }
-
-  /**
-   * 休眠
-   */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

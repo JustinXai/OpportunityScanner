@@ -1,103 +1,139 @@
-// Indie Hackers 采集器
-// 采集 MRR 自曝和失败复盘
+// Indie Hackers 搜索采集器 V2
+// 使用 Serper 搜索 + 进化引擎
+// 采集真实创业者和独立开发者的讨论
 
-import axios, { AxiosInstance } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import type { RawSignal } from '../types.js';
+import { SerperClient } from '../serper-client.js';
+import { ScanCacheManager, EvolutionEngine } from '../evolution-engine.js';
 
 export class IndieHackersRunner {
-  private client: AxiosInstance;
+  private serper: SerperClient;
+  private evolution: EvolutionEngine;
+  private cache: ScanCacheManager;
 
-  constructor() {
-    this.client = axios.create({
-      baseURL: 'https://google.serper.dev/search',
-      headers: {
-        'X-API-KEY': process.env.SERPER_API_KEY || '',
-        'Content-Type': 'application/json'
-      },
-      timeout: 30000
-    });
+  constructor(cache: ScanCacheManager, evolution: EvolutionEngine) {
+    this.cache = cache;
+    this.evolution = evolution;
+    this.serper = new SerperClient(cache);
   }
 
   /**
    * 搜索 Indie Hackers
    */
-  async search(keywords: string[], maxResults: number = 20): Promise<RawSignal[]> {
-    console.log(`\n💡 [IndieHackers] 搜索 Indie Hackers...`);
+  async search(keywords?: string[], maxResults: number = 20): Promise<RawSignal[]> {
+    const baseKeywords = keywords || [
+      'API billing SaaS', 'LLM cost tracking', 'AI gateway',
+      'developer tool MRR', 'SaaS pricing', 'API monetization',
+      'usage based billing', 'token billing', 'MCP server'
+    ];
+
+    console.log(`\n🚀 [IndieHackers] 搜索 (${baseKeywords.length} 个关键词)...`);
+
+    // 获取进化后的关键词
+    const evolvedKeywords = this.evolution.getNextKeywords('indiehackers', baseKeywords);
+    const searchKeywords = evolvedKeywords.slice(0, 12);
 
     const signals: RawSignal[] = [];
 
-    for (const keyword of keywords.slice(0, 8)) {
-      try {
-        const query = `"${keyword}" site:indiehackers.com`;
+    for (const keyword of searchKeywords) {
+      const query = `"${keyword}" site:indiehackers.com`;
+      const results = await this.serper.searchWithDedup(query, { num: maxResults });
 
-        const response = await this.client.post('', {
-          q: query,
-          num: maxResults
+      for (const item of results) {
+        if (!item.link?.includes('indiehackers.com')) continue;
+
+        signals.push({
+          id: uuidv4(),
+          source_type: 'indie_hackers',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [keyword]
         });
 
-        const items = response.data?.organic || [];
+        this.cache.markScanned(item.link, item.title);
+      }
 
-        for (const item of items) {
-          const signal = this.itemToSignal(item, keyword);
-          if (signal) {
-            signals.push(signal);
-          }
+      await this.sleep(1200);
+    }
+
+    // 记录性能
+    this.evolution.recordQueryPerformance('indiehackers', 'search', signals.length, 0);
+
+    // 关键词裂变
+    const newKeywords = this.evolution.fissionKeywords('indiehackers', signals, signals);
+    if (newKeywords.length > 0) {
+      console.log(`   🧬 裂变出 ${newKeywords.length} 个新关键词`);
+
+      for (const kw of newKeywords.slice(0, 5)) {
+        const query = `"${kw}" site:indiehackers.com`;
+        const results = await this.serper.searchWithDedup(query, { num: 10 });
+
+        for (const item of results) {
+          signals.push({
+            id: uuidv4(),
+            source_type: 'indie_hackers',
+            source_url: item.link,
+            source_title: item.title,
+            source_date: new Date().toISOString().split('T')[0],
+            raw_content: `${item.title}\n${item.snippet || ''}`,
+            discovered_at: new Date().toISOString(),
+            keywords_matched: [kw, 'fission']
+          });
+
+          this.cache.markScanned(item.link, item.title);
         }
 
-        console.log(`   💡 "${keyword}": ${items.length} 条结果`);
-
         await this.sleep(1000);
-
-      } catch (error: any) {
-        console.log(`   ⚠️ 搜索 "${keyword}" 失败: ${error.message}`);
       }
     }
 
-    const uniqueSignals = this.deduplicate(signals);
-
-    console.log(`   ✅ 采集到 ${uniqueSignals.length} 个 Indie Hackers 信号`);
-    return uniqueSignals;
+    console.log(`   ✅ 采集到 ${signals.length} 个 Indie Hackers 信号`);
+    return signals;
   }
 
   /**
-   * Item 转信号
+   * 搜索收入自曝
    */
-  private itemToSignal(item: any, matchedKeyword: string): RawSignal | null {
-    const url = item.link || '';
+  async searchRevenue(): Promise<RawSignal[]> {
+    console.log(`\n💰 [IndieHackers] 搜索收入自曝...`);
 
-    // 只保留 Indie Hackers 链接
-    if (!url.includes('indiehackers.com')) return null;
+    const keywords = [
+      'MRR reached', 'revenue milestone', 'first $',
+      'paying customers', 'SaaS growth', 'monthly revenue'
+    ];
 
-    const title = item.title || '';
+    const signals: RawSignal[] = [];
 
-    return {
-      id: uuidv4(),
-      source_type: 'indie_hackers',
-      source_url: url,
-      source_title: title,
-      source_date: new Date().toISOString().split('T')[0],
-      raw_content: `${title}\n${item.snippet || ''}`,
-      discovered_at: new Date().toISOString(),
-      keywords_matched: [matchedKeyword]
-    };
+    for (const keyword of keywords) {
+      const query = `"${keyword}" site:indiehackers.com`;
+      const results = await this.serper.searchWithDedup(query, { num: 15 });
+
+      for (const item of results) {
+        signals.push({
+          id: uuidv4(),
+          source_type: 'indie_hackers',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [keyword, 'revenue']
+        });
+
+        this.cache.markScanned(item.link, item.title);
+      }
+
+      await this.sleep(1000);
+    }
+
+    console.log(`   ✅ 采集到 ${signals.length} 个收入自曝`);
+    return signals;
   }
 
-  /**
-   * 去重
-   */
-  private deduplicate(signals: RawSignal[]): RawSignal[] {
-    const seen = new Set<string>();
-    return signals.filter(s => {
-      if (seen.has(s.source_url)) return false;
-      seen.add(s.source_url);
-      return true;
-    });
-  }
-
-  /**
-   * 休眠
-   */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

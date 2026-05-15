@@ -1,57 +1,23 @@
-// Product Hunt 数据采集器
-// 采集 Product Hunt 上的新产品，了解定位和热度
+// Product Hunt 数据采集器 V2
+// 使用 Serper 搜索 + 直接网页抓取
+// 降级方案：无需 API Key
 
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
 import type { RawSignal } from '../types.js';
-import * as fs from 'fs';
-import * as yaml from 'yaml';
-
-interface PHEdge {
-  node: PHProduct;
-}
-
-interface PHProduct {
-  id: string;
-  name: string;
-  tagline: string;
-  description: string;
-  url: string;
-  votesCount: number;
-  commentsCount: number;
-  topics?: {
-    edges: Array<{ node: { name: string } }>;
-  };
-  featuredAt: string;
-  maker?: Array<{
-    id: string;
-    name: string;
-    url: string;
-  }>;
-}
-
-interface PHConfig {
-  ph_api_token?: string;
-  keywords?: {
-    producthunt_tags?: string[];
-  };
-}
+import { SerperClient } from '../serper-client.js';
+import { ScanCacheManager, EvolutionEngine } from '../evolution-engine.js';
 
 export class ProductHuntRunner {
-  private client: AxiosInstance;
-  private config: PHConfig;
+  private serper: SerperClient;
+  private evolution: EvolutionEngine;
+  private cache: ScanCacheManager;
 
-  constructor(config: PHConfig = {}) {
-    this.config = config;
-    this.client = axios.create({
-      baseURL: 'https://api.producthunt.com/v2/api/graphql',
-      headers: {
-        'Authorization': `Bearer ${config.ph_api_token || process.env.PH_API_TOKEN || ''}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 30000
-    });
+  constructor(cache: ScanCacheManager, evolution: EvolutionEngine) {
+    this.cache = cache;
+    this.evolution = evolution;
+    this.serper = new SerperClient(cache);
   }
 
   /**
@@ -61,179 +27,134 @@ export class ProductHuntRunner {
     console.log(`\n🏆 [ProductHunt] 采集最近 ${days} 天的产品...`);
 
     const signals: RawSignal[] = [];
-    const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
 
-    try {
-      // 尝试 GraphQL API
-      const query = `
-        query GetPosts($postedAfter: DateTime, $first: Int) {
-          posts(postedAfter: $postedAfter, first: $first, order: VOTES) {
-            edges {
-              node {
-                id
-                name
-                tagline
-                description
-                url
-                votesCount
-                commentsCount
-                topics {
-                  edges {
-                    node {
-                      name
-                    }
-                  }
-                }
-                featuredAt
-                maker {
-                  id
-                  name
-                  url
-                }
-              }
-            }
-          }
-        }
-      `;
+    // 方法1: Serper 搜索
+    const keywords = [
+      'AI tool launched', 'developer API product',
+      'SaaS launch', 'GPT wrapper launched',
+      'AI agent product', 'LLM tool launch'
+    ];
 
-      const response = await this.client.post('', {
-        query,
-        variables: {
-          postedAfter: startDate.toISOString(),
-          first: limit
-        }
-      });
+    for (const keyword of keywords.slice(0, 8)) {
+      const query = `"${keyword}" site:producthunt.com`;
+      const results = await this.serper.searchWithDedup(query, { num: 15 });
 
-      const edges: PHEdge[] = response.data?.data?.posts?.edges || [];
+      for (const item of results) {
+        if (!item.link?.includes('producthunt.com/posts')) continue;
 
-      for (const edge of edges) {
-        const product = edge.node;
-        const topics = product.topics?.edges?.map((e: { node: { name: string } }) => e.node.name) || [];
+        signals.push({
+          id: uuidv4(),
+          source_type: 'product_hunt',
+          source_url: item.link,
+          source_title: item.title,
+          source_date: new Date().toISOString().split('T')[0],
+          raw_content: `${item.title}\n${item.snippet || ''}`,
+          discovered_at: new Date().toISOString(),
+          keywords_matched: [keyword]
+        });
 
-        // 检查是否匹配关键词
-        const matchedTags = this.matchKeywords(topics);
-        if (matchedTags.length > 0 || product.votesCount > 100) {
-          signals.push(this.productToSignal(product, matchedTags));
-        }
+        this.cache.markScanned(item.link, item.title);
       }
 
-      console.log(`   ✅ 采集到 ${signals.length} 个 Product Hunt 信号`);
-
-    } catch (error: any) {
-      console.log(`   ⚠️ Product Hunt API 失败: ${error.message}`);
-      console.log(`   尝试网页爬取...`);
-      // 降级到网页爬取
-      return this.fetchViaWebScraping(days);
+      await this.sleep(1200);
     }
 
+    // 方法2: 直接抓取 PH 首页（备用）
+    if (signals.length < 10) {
+      const fallbackSignals = await this.fetchViaDirectScrape(limit);
+      signals.push(...fallbackSignals);
+    }
+
+    // 记录性能
+    this.evolution.recordQueryPerformance('producthunt', 'recent', signals.length, 0);
+
+    console.log(`   ✅ 采集到 ${signals.length} 个 Product Hunt 信号`);
     return signals;
   }
 
   /**
-   * 网页爬取降级方案
+   * 直接抓取 Product Hunt
    */
-  private async fetchViaWebScraping(days: number): Promise<RawSignal[]> {
-    console.log(`   [ProductHunt] 使用网页爬取模式...`);
+  private async fetchViaDirectScrape(limit: number): Promise<RawSignal[]> {
+    console.log(`   [ProductHunt] 尝试直接抓取...`);
 
     const signals: RawSignal[] = [];
-    const endDate = new Date();
 
     try {
-      // 使用 Serper API 搜索 Product Hunt
-      const serperClient = axios.create({
-        baseURL: 'https://google.serper.dev/search',
+      const response = await axios.get('https://www.producthunt.com/', {
         headers: {
-          'X-API-KEY': process.env.SERPER_API_KEY || '',
-          'Content-Type': 'application/json'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html'
         },
-        timeout: 20000
+        timeout: 10000
       });
 
-      const searchQuery = `site:producthunt.com "${endDate.getFullYear()}" AI OR API OR developer OR tool`;
+      const $ = cheerio.load(response.data);
 
-      const response = await serperClient.post('', { q: searchQuery, num: 20 });
-      const items = response.data?.organic || [];
+      // 解析产品卡片
+      $('a[href*="/posts/"]').each((_, el) => {
+        if (signals.length >= limit) return false;
 
-      for (const item of items) {
-        if (item.link?.includes('producthunt.com/posts')) {
-          const match = item.title.match(/^([^—]+?)\s*[-–]\s*(.+)/);
+        const $el = $(el);
+        const title = $el.find('h3, [data-test="post-title"]').text().trim();
+        const link = 'https://producthunt.com' + $el.attr('href');
+        const tagline = $el.find('[data-test="post-tagline"], p').text().trim();
+
+        if (title && link && !this.cache.hasScanned(link, title)) {
           signals.push({
             id: uuidv4(),
             source_type: 'product_hunt',
-            source_url: item.link || '',
-            source_title: match ? match[2] : item.title,
+            source_url: link,
+            source_title: title,
             source_date: new Date().toISOString().split('T')[0],
-            raw_content: item.snippet || '',
+            raw_content: `${title}\n${tagline}`,
             discovered_at: new Date().toISOString(),
-            keywords_matched: this.extractKeywords(item.snippet || item.title)
+            keywords_matched: []
           });
+
+          this.cache.markScanned(link, title);
         }
-      }
+      });
 
     } catch (error: any) {
-      console.log(`   ❌ Product Hunt 采集失败: ${error.message}`);
+      console.log(`   ⚠️ 直接抓取失败: ${error.message}`);
     }
 
     return signals;
   }
 
   /**
-   * 产品转信号
+   * 按标签搜索
    */
-  private productToSignal(product: PHProduct, matchedTags: string[]): RawSignal {
-    return {
-      id: uuidv4(),
-      source_type: 'product_hunt',
-      source_url: `https://www.producthunt.com/posts/${product.id}`,
-      source_title: product.name,
-      source_date: product.featuredAt?.split('T')[0] || new Date().toISOString().split('T')[0],
-      raw_content: `${product.name}: ${product.tagline}\n${product.description || ''}\nVotes: ${product.votesCount}, Comments: ${product.commentsCount}`,
-      discovered_at: new Date().toISOString(),
-      keywords_matched: matchedTags
-    };
-  }
+  async searchByTag(tag: string, limit: number = 30): Promise<RawSignal[]> {
+    console.log(`   🏆 [ProductHunt] 搜索 #${tag}...`);
 
-  /**
-   * 匹配关键词
-   */
-  private matchKeywords(topics: string[]): string[] {
-    const config = this.loadKeywords();
-    const targetTags = config?.producthunt_tags || ['artificial-intelligence', 'developer-tools', 'api'];
-    const matched: string[] = [];
+    const query = `"${tag}" site:producthunt.com`;
+    const results = await this.serper.searchWithDedup(query, { num: limit });
 
-    for (const topic of topics) {
-      const normalizedTopic = topic.toLowerCase().replace(/\s+/g, '-');
-      if (targetTags.some((t: string) => normalizedTopic.includes(t.toLowerCase()) || t.toLowerCase().includes(normalizedTopic))) {
-        matched.push(topic);
-      }
+    const signals: RawSignal[] = [];
+
+    for (const item of results) {
+      if (!item.link?.includes('producthunt.com/posts')) continue;
+
+      signals.push({
+        id: uuidv4(),
+        source_type: 'product_hunt',
+        source_url: item.link,
+        source_title: item.title,
+        source_date: new Date().toISOString().split('T')[0],
+        raw_content: `${item.title}\n${item.snippet || ''}`,
+        discovered_at: new Date().toISOString(),
+        keywords_matched: [tag]
+      });
+
+      this.cache.markScanned(item.link, item.title);
     }
 
-    return matched;
+    return signals;
   }
 
-  /**
-   * 提取关键词
-   */
-  private extractKeywords(text: string): string[] {
-    const keywords = [
-      'AI', 'API', 'LLM', 'gateway', 'agent', 'MCP', 'billing',
-      'developer', 'tool', 'SaaS', 'open-source', 'GPT', 'OpenAI'
-    ];
-
-    return keywords.filter(k => text.toLowerCase().includes(k.toLowerCase()));
-  }
-
-  /**
-   * 加载关键词配置
-   */
-  private loadKeywords(): any {
-    try {
-      const configPath = './keywords.yaml';
-      if (fs.existsSync(configPath)) {
-        return yaml.parse(fs.readFileSync(configPath, 'utf-8'));
-      }
-    } catch {}
-    return {};
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

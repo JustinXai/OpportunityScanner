@@ -1,9 +1,9 @@
 // Opportunity Radar V2 - 主入口
 // 半自动扫描器
+// 特性：防重复采集 + 搜索词裂变进化 + 一次性运行锁
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
 import * as yaml from 'yaml';
 import 'dotenv/config';
 
@@ -19,6 +19,9 @@ import { TelegramRunner } from './sources/telegram.js';
 import { DevToRunner } from './sources/devto.js';
 import { StackOverflowRunner } from './sources/stackoverflow.js';
 
+// 进化引擎
+import { ScanCacheManager, EvolutionEngine } from './evolution-engine.js';
+
 // 分类器
 import { SignalClassifier } from './classifiers/signal-classifier.js';
 
@@ -28,16 +31,64 @@ import { ScoringEngine } from './scoring/scoring-engine.js';
 // 输出生成器
 import { generateOutputFiles, generateRunRecord } from './generators/output-generator.js';
 
+// 一次性运行锁
+const LOCK_FILE = path.join(process.cwd(), 'logs', 'scan.lock');
+
+function acquireLock(): boolean {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const lockData = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf-8'));
+      const lockTime = new Date(lockData.time).getTime();
+      const now = Date.now();
+      const elapsed = (now - lockTime) / 1000 / 60; // 分钟
+
+      if (elapsed < 60) {
+        console.log(`\n🔒 扫描正在运行中 (已运行 ${Math.round(elapsed)} 分钟)`);
+        console.log(`   上次启动: ${lockData.time}`);
+        return false;
+      }
+
+      // 锁超时，删除旧锁
+      fs.unlinkSync(LOCK_FILE);
+    }
+
+    // 创建新锁
+    fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true });
+    fs.writeFileSync(LOCK_FILE, JSON.stringify({
+      time: new Date().toISOString(),
+      pid: process.pid
+    }), 'utf-8');
+
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function releaseLock(): void {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      fs.unlinkSync(LOCK_FILE);
+    }
+  } catch {}
+}
+
 /**
  * Opportunity Radar V2
  */
 export class OpportunityRadar {
   private config: RadarConfig;
   private runId: string;
+  private cache: ScanCacheManager;
+  private evolution: EvolutionEngine;
 
   constructor(config?: Partial<RadarConfig>) {
     this.runId = this.generateRunId();
     this.config = this.loadConfig(config);
+
+    // 初始化进化引擎
+    this.cache = new ScanCacheManager();
+    this.evolution = new EvolutionEngine(this.cache);
   }
 
   /**
@@ -88,13 +139,34 @@ export class OpportunityRadar {
    * 运行扫描
    */
   async run(): Promise<ScanRun> {
+    // 获取锁
+    if (!acquireLock()) {
+      console.log('❌ 已有扫描进程运行中，请等待完成或1小时后重试');
+      process.exit(1);
+    }
+
     console.log('='.repeat(60));
     console.log('🎯 OPPORTUNITY RADAR V2');
     console.log('📡 半自动扫描器 - Signal Event 驱动');
     console.log('🧠 引擎: DeepSeek 分类 + 规则评分');
+    console.log('🔄 进化: 关键词裂变 + 防重复采集');
     console.log('='.repeat(60));
     console.log(`📅 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`);
     console.log(`🔖 Run ID: ${this.runId}\n`);
+
+    // 显示进化统计
+    const evoStats = this.evolution.getStats();
+    console.log(`📊 进化引擎 v${evoStats.version}:`);
+    console.log(`   成功关键词: ${evoStats.successfulCount}`);
+    console.log(`   关键词池: ${Object.entries(evoStats.poolSizes).map(([k, v]) => `${k}:${v}`).join(', ')}`);
+    console.log('');
+
+    // 显示缓存统计
+    const cacheStats = this.cache.getStats();
+    console.log(`💾 扫描缓存:`);
+    console.log(`   已扫描信号: ${cacheStats.totalScanned}`);
+    console.log(`   金矿信号: ${cacheStats.goldSignals}`);
+    console.log('');
 
     const startTime = Date.now();
 
@@ -132,45 +204,52 @@ export class OpportunityRadar {
       run.raw_signals_count = rawSignals.length;
 
       // ========== 第二步：LLM 分类 ==========
-      console.log('\n🧠 [STAGE 2] LLM 分类...\n');
+      if (rawSignals.length > 0) {
+        console.log('\n🧠 [STAGE 2] LLM 分类...\n');
 
-      const classifier = new SignalClassifier({
-        api_key: this.config.deepseek_api_key
-      });
+        const classifier = new SignalClassifier({
+          api_key: this.config.deepseek_api_key
+        });
 
-      const classifiedSignals = await classifier.classify(rawSignals);
+        const classifiedSignals = await classifier.classify(rawSignals);
 
-      console.log(`\n   📊 成功分类 ${classifiedSignals.length} 条信号`);
+        console.log(`\n   📊 成功分类 ${classifiedSignals.length} 条信号`);
 
-      run.classified_signals_count = classifiedSignals.length;
+        run.classified_signals_count = classifiedSignals.length;
 
-      // ========== 第三步：评分和决策 ==========
-      console.log('\n📊 [STAGE 3] 评分和决策...\n');
+        // ========== 第三步：评分和决策 ==========
+        console.log('\n📊 [STAGE 3] 评分和决策...\n');
 
-      const scoringEngine = new ScoringEngine({
-        build_threshold: this.config.build_threshold,
-        probe_threshold: this.config.probe_threshold,
-        watch_threshold: this.config.watch_threshold,
-        require_fit_for_build: this.config.require_fit_for_build
-      });
+        const scoringEngine = new ScoringEngine({
+          build_threshold: this.config.build_threshold,
+          probe_threshold: this.config.probe_threshold,
+          watch_threshold: this.config.watch_threshold,
+          require_fit_for_build: this.config.require_fit_for_build
+        });
 
-      const scoredSignals = scoringEngine.scoreAll(classifiedSignals);
+        const scoredSignals = scoringEngine.scoreAll(classifiedSignals);
 
-      // 更新摘要
-      run.summary = scoringEngine.getSummary(scoredSignals);
-      run.signals = scoredSignals;
+        // 更新摘要
+        run.summary = scoringEngine.getSummary(scoredSignals);
+        run.signals = scoredSignals;
 
-      // ========== 第四步：生成输出文件 ==========
-      console.log('\n📁 [STAGE 4] 生成输出文件...\n');
+        // ========== 第四步：生成输出文件 ==========
+        console.log('\n📁 [STAGE 4] 生成输出文件...\n');
 
-      await generateOutputFiles(scoredSignals, {
-        output_dir: this.config.output_dir,
-        run_id: this.runId
-      });
+        await generateOutputFiles(scoredSignals, {
+          output_dir: this.config.output_dir,
+          run_id: this.runId
+        });
+      }
 
       // 生成运行记录
       run.completed_at = new Date().toISOString();
       generateRunRecord(run, this.config.output_dir);
+
+      // 更新缓存
+      this.cache.updateLastScan();
+      this.cache.save();
+      this.evolution.save();
 
       // ========== 完成 ==========
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -190,6 +269,9 @@ export class OpportunityRadar {
     } catch (error: any) {
       console.error(`\n❌ 扫描失败: ${error.message}`);
       run.completed_at = new Date().toISOString();
+    } finally {
+      // 释放锁
+      releaseLock();
     }
 
     return run;
@@ -205,10 +287,9 @@ export class OpportunityRadar {
     // Product Hunt
     if (sources.includes('product_hunt')) {
       try {
-        const phRunner = new ProductHuntRunner({ ph_api_token: this.config.ph_api_token });
+        const phRunner = new ProductHuntRunner(this.cache, this.evolution);
         const signals = await phRunner.fetchRecentProducts(7, 50);
         allSignals.push(...signals);
-        this.addSource(sources, 'product_hunt');
       } catch (error: any) {
         console.log(`   ⚠️ Product Hunt 采集失败: ${error.message}`);
       }
@@ -221,7 +302,6 @@ export class OpportunityRadar {
         const topics = keywords?.github_topics || ['openai-api', 'llm-gateway', 'mcp', 'agent-framework'];
         const signals = await ghRunner.searchByTopics(topics, 15);
         allSignals.push(...signals);
-        this.addSource(sources, 'github');
       } catch (error: any) {
         console.log(`   ⚠️ GitHub 采集失败: ${error.message}`);
       }
@@ -237,7 +317,6 @@ export class OpportunityRadar {
         ];
         const signals = await hnRunner.search(keywordList, 20);
         allSignals.push(...signals);
-        this.addSource(sources, 'hacker_news');
       } catch (error: any) {
         console.log(`   ⚠️ Hacker News 采集失败: ${error.message}`);
       }
@@ -246,23 +325,16 @@ export class OpportunityRadar {
     // Reddit
     if (sources.includes('reddit')) {
       try {
-        const redditRunner = new RedditRunner({ serper_api_key: this.config.serper_api_key });
-
-        // 痛点关键词
+        const redditRunner = new RedditRunner(this.cache, this.evolution);
         const painKeywords = keywords?.core_tracks?.ai_api_gateway?.pain_keywords || [
           'overcharged', 'fake model', 'quota disappeared', 'billing surprise'
         ];
-
-        // 赚钱自曝
         const moneyKeywords = keywords?.money_terms?.medium_value || [
           '$ MRR', 'paying customers', 'Stripe'
         ];
-
-        const painSignals = await redditRunner.searchPainPoints();
-        const moneySignals = await redditRunner.searchRevenue();
-
+        const painSignals = await redditRunner.searchPainPoints(painKeywords);
+        const moneySignals = await redditRunner.searchRevenue(moneyKeywords);
         allSignals.push(...painSignals, ...moneySignals);
-        this.addSource(sources, 'reddit');
       } catch (error: any) {
         console.log(`   ⚠️ Reddit 采集失败: ${error.message}`);
       }
@@ -271,19 +343,16 @@ export class OpportunityRadar {
     // Indie Hackers
     if (sources.includes('indie_hackers')) {
       try {
-        const ihRunner = new IndieHackersRunner();
+        const ihRunner = new IndieHackersRunner(this.cache, this.evolution);
         const keywords = [
           'API billing', 'LLM cost', 'AI gateway', 'SaaS MRR', 'developer tool'
         ];
         const signals = await ihRunner.search(keywords, 20);
         allSignals.push(...signals);
-        this.addSource(sources, 'indie_hackers');
       } catch (error: any) {
         console.log(`   ⚠️ Indie Hackers 采集失败: ${error.message}`);
       }
     }
-
-    // ========== 新增数据源 ==========
 
     // Telegram
     if (sources.includes('telegram')) {
@@ -291,7 +360,6 @@ export class OpportunityRadar {
         const tgRunner = new TelegramRunner();
         const signals = await tgRunner.fetchAllChannels();
         allSignals.push(...signals);
-        this.addSource(sources, 'telegram');
       } catch (error: any) {
         console.log(`   ⚠️ Telegram 采集失败: ${error.message}`);
       }
@@ -303,7 +371,6 @@ export class OpportunityRadar {
         const devRunner = new DevToRunner();
         const signals = await devRunner.fetchAllTags();
         allSignals.push(...signals);
-        this.addSource(sources, 'dev_to');
       } catch (error: any) {
         console.log(`   ⚠️ DEV.to 采集失败: ${error.message}`);
       }
@@ -315,36 +382,15 @@ export class OpportunityRadar {
         const soRunner = new StackOverflowRunner();
         const signals = await soRunner.fetchAllTags();
         allSignals.push(...signals);
-        this.addSource(sources, 'stack_overflow');
       } catch (error: any) {
         console.log(`   ⚠️ Stack Overflow 采集失败: ${error.message}`);
       }
     }
 
-    // 去重
-    const uniqueSignals = this.deduplicateSignals(allSignals);
+    // 去重（基于扫描缓存）
+    const uniqueSignals = this.cache.filterDuplicates(allSignals);
 
     return uniqueSignals;
-  }
-
-  /**
-   * 添加已扫描的源
-   */
-  private addSource(sources: string[], source: string): void {
-    // 跟踪已扫描的源
-  }
-
-  /**
-   * 信号去重
-   */
-  private deduplicateSignals(signals: import('./types.js').RawSignal[]): import('./types.js').RawSignal[] {
-    const seen = new Set<string>();
-    return signals.filter(s => {
-      const key = s.source_url || s.source_title;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
   }
 }
 
