@@ -1,0 +1,27 @@
+{
+  "name": "opportunity-radar",
+  "version": "2.0.0",
+  "description": "Opportunity Radar V2 - Signal Event 扫描器",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "scan": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "uuid": "^9.0.0",
+    "yaml": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

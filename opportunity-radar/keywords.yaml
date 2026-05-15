@@ -1,0 +1,150 @@
+# Opportunity Radar V2 - 关键词配置
+# 第一版扫描关键词，按赛道分类
+
+core_tracks:
+  # ===========================================
+  # AI API Gateway 主线
+  # ===========================================
+  ai_api_gateway:
+    priority: 5
+    include:
+      - "OpenAI-compatible API"
+      - "AI gateway"
+      - "LLM gateway"
+      - "AI API billing"
+      - "LLM cost tracking"
+      - "model routing"
+      - "model fallback"
+      - "LiteLLM"
+      - "OpenRouter alternative"
+      - "usage field"
+      - "streaming broken"
+      - "fake model"
+      - "AI token reseller"
+      - "shadow API"
+      - "AI gateway observability"
+    pain_keywords:
+      - "overcharged"
+      - "refund"
+      - "quota disappeared"
+      - "usage mismatch"
+      - "API key leaked"
+      - "rate limited"
+      - "model unavailable"
+      - "billing surprise"
+
+  # ===========================================
+  # MCP / Agent 基础设施
+  # ===========================================
+  mcp_agent_infra:
+    priority: 5
+    include:
+      - "MCP server"
+      - "agent tools"
+      - "OpenRouter for tools"
+      - "paid MCP"
+      - "agent billing"
+      - "agent API"
+      - "hosted MCP"
+      - "OAuth MCP"
+      - "Google Ads MCP"
+      - "Meta Ads MCP"
+      - "agent API keys"
+      - "tool calling billing"
+      - "MCP marketplace"
+    pain_keywords:
+      - "MCP broken"
+      - "agent down"
+      - "tool timeout"
+
+  # ===========================================
+  # AI 开发工具
+  # ===========================================
+  ai_devtools:
+    priority: 4
+    include:
+      - "coding agent"
+      - "AI code review"
+      - "agent orchestration"
+      - "AI agent monitoring"
+      - "AI agent evaluation"
+      - "persistent context"
+      - "AI agent antivirus"
+      - "agent framework"
+    pain_keywords:
+      - "context lost"
+      - "agent hallucination"
+      - "code quality issues"
+
+# ===========================================
+# 赚钱自曝关键词
+# ===========================================
+money_terms:
+  high_value:
+    - "$ MRR"
+    - "MRR in"
+    - "paying customers"
+    - "Stripe screenshot"
+    - "TrustMRR"
+    - "hit $"
+    - "verified listing"
+  medium_value:
+    - "revenue"
+    - "profit margin"
+    - "subscribers"
+    - "churn"
+    - "lifetime deal"
+    - "launched my API"
+
+# ===========================================
+# Product Hunt 专用标签
+# ===========================================
+producthunt_tags:
+  - "artificial-intelligence"
+  - "developer-tools"
+  - "api"
+  - "saas"
+  - "open-source"
+  - "bots"
+
+# ===========================================
+# Reddit 搜索关键词
+# ===========================================
+reddit_search:
+  subreddits:
+    - "r/SideProject"
+    - "r/startups"
+    - "r/Entrepreneur"
+    - "r/webdev"
+    - "r/programming"
+    - "r/indiehackers"
+    - "r/ SaaS"
+  keywords:
+    - "API billing"
+    - "LLM cost"
+    - "AI gateway"
+    - "MCP server"
+    - "coding agent"
+
+# ===========================================
+# 决策规则
+# ===========================================
+decision_rules:
+  build_threshold: 85
+  probe_threshold: 72
+  watch_threshold: 55
+  require_fit_for_build: 4
+  require_money_level_for_build: 3
+
+# ===========================================
+# GitHub 搜索主题
+# ===========================================
+github_topics:
+  - "openai-api"
+  - "llm-gateway"
+  - "ai-gateway"
+  - "model-routing"
+  - "ai-proxy"
+  - "mcp"
+  - "agent-framework"
+  - "ai-billing"
